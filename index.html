@@ -1,0 +1,431 @@
+<!doctype html>
+<html lang="en" class="scroll-smooth">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Attention Over Time</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            fontFamily: {
+              sans: ["Inter", "system-ui", "sans-serif"],
+            },
+            colors: {
+              ink: "#000000",
+              surface: "#F7F8FA",
+              muted: "#5F6B75",
+              c1: "#000000",
+              c2: "#233D4D",
+              c3: "#FE7F2D",
+              c4: "#EAECF0",
+            },
+          },
+        },
+      };
+    </script>
+    <script src="theme.js"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body
+    class="bg-surface text-ink font-sans antialiased dark:bg-[#0B1319] dark:text-gray-100"
+  >
+    <!-- Cover -->
+    <section
+      class="relative min-h-screen flex items-center justify-center overflow-hidden gradient-bg cover-grid"
+    >
+      <div
+        class="glow-orb w-96 h-96 bg-c3 top-10 -left-20"
+        style="position: absolute"
+      ></div>
+      <div
+        class="glow-orb w-80 h-80 bg-c4 bottom-10 right-10"
+        style="position: absolute"
+      ></div>
+      <div
+        class="glow-orb w-64 h-64 bg-c2 top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2"
+        style="position: absolute"
+      ></div>
+
+      <div class="relative z-10 text-center px-6 max-w-3xl mx-auto">
+        <p class="text-c4 text-sm font-medium tracking-widest uppercase mb-6">
+          Attention Mechanisms
+        </p>
+        <h1
+          class="text-5xl md:text-7xl font-bold text-white leading-tight mb-6"
+          style="text-shadow: 0 2px 24px rgba(0, 0, 0, 0.35)"
+        >
+          Attention <br />Over Time
+        </h1>
+        <p
+          class="text-lg md:text-xl text-white/85 leading-relaxed max-w-2xl mx-auto mb-16"
+          style="text-shadow: 0 1px 12px rgba(0, 0, 0, 0.3)"
+        >
+          What happens to queries, keys, and values when the sequence is a
+          signal, <br /><em>and the measurements arrive whenever they like</em>.
+        </p>
+      </div>
+
+      <!-- Scroll indicator -->
+      <div
+        class="absolute bottom-8 left-1/2 -translate-x-1/2 text-white/50 animate-bounce"
+      >
+        <svg
+          class="w-6 h-6"
+          fill="none"
+          stroke="currentColor"
+          viewBox="0 0 24 24"
+        >
+          <path
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            stroke-width="2"
+            d="M19 14l-7 7m0 0l-7-7m7 7V3"
+          />
+        </svg>
+      </div>
+    </section>
+
+    <!-- Syllabus -->
+    <section class="py-24 px-6">
+      <div class="max-w-2xl mx-auto">
+        <p class="text-sm text-muted uppercase tracking-widest mb-4">
+          Syllabus
+        </p>
+        <h2 class="text-3xl font-semibold mb-4">Topics</h2>
+        <p class="text-muted mb-6 leading-relaxed">
+          Sections 01 to 05 carry attention over from sentences to signals.
+          Sections 06 to 09 break it, by admitting that real measurements do not
+          arrive on a grid. Sections 10 to 15 rebuild it as Multi-Time Attention,
+          where the queries and the keys are made of time itself.
+        </p>
+        <p class="text-muted mb-12 leading-relaxed text-sm">
+          This tutorial assumes scaled dot-product attention, self-attention,
+          multi-head attention, masking, and positional encodings. All of that is
+          built from scratch in
+          <a
+            href="../queries_keys_and_values/index.html"
+            class="text-c3 hover:text-c2 transition-colors"
+            >Queries, Keys, and Values</a
+          >.
+        </p>
+
+        <p class="text-xs uppercase tracking-[0.2em] text-c3 font-semibold mb-6">
+          Part I &nbsp;&middot;&nbsp; Sequences that are signals
+        </p>
+
+        <div class="space-y-6">
+          <a href="topics/tokens_to_timestamps.html" class="block group">
+            <div class="flex items-baseline gap-4">
+              <span class="text-sm text-c3 font-medium">01</span>
+              <div>
+                <p
+                  class="text-lg font-medium group-hover:text-c3 transition-colors"
+                >
+                  From Tokens to Timestamps
+                </p>
+                <p class="text-sm text-muted mt-1">
+                  What a sequence model assumes about its input, and which of
+                  those assumptions a measured signal quietly breaks.
+                </p>
+              </div>
+            </div>
+          </a>
+
+          <hr class="border-gray-200 dark:border-gray-800" />
+
+          <a href="topics/one_number.html" class="block group">
+            <div class="flex items-baseline gap-4">
+              <span class="text-sm text-c3 font-medium">02</span>
+              <div>
+                <p
+                  class="text-lg font-medium group-hover:text-c3 transition-colors"
+                >
+                  One Number Is Not a Word
+                </p>
+                <p class="text-sm text-muted mt-1">
+                  A single reading carries almost no meaning, and there are far
+                  too many of them to compare pairwise.
+                </p>
+              </div>
+            </div>
+          </a>
+
+          <hr class="border-gray-200 dark:border-gray-800" />
+
+          <a href="topics/patching.html" class="block group">
+            <div class="flex items-baseline gap-4">
+              <span class="text-sm text-c3 font-medium">03</span>
+              <div>
+                <p
+                  class="text-lg font-medium group-hover:text-c3 transition-colors"
+                >
+                  Patches
+                </p>
+                <p class="text-sm text-muted mt-1">
+                  Cutting the signal into windows so that one token carries a
+                  shape, and the sequence gets short enough to read.
+                </p>
+              </div>
+            </div>
+          </a>
+
+          <hr class="border-gray-200 dark:border-gray-800" />
+
+          <a href="topics/channels.html" class="block group">
+            <div class="flex items-baseline gap-4">
+              <span class="text-sm text-c3 font-medium">04</span>
+              <div>
+                <p
+                  class="text-lg font-medium group-hover:text-c3 transition-colors"
+                >
+                  Many Channels, One Clock
+                </p>
+                <p class="text-sm text-muted mt-1">
+                  Several variables measured at once: whether to mix them inside
+                  attention, or keep each one to itself.
+                </p>
+              </div>
+            </div>
+          </a>
+
+          <hr class="border-gray-200 dark:border-gray-800" />
+
+          <a href="topics/forecasting.html" class="block group">
+            <div class="flex items-baseline gap-4">
+              <span class="text-sm text-c3 font-medium">05</span>
+              <div>
+                <p
+                  class="text-lg font-medium group-hover:text-c3 transition-colors"
+                >
+                  Forecasting Under a Causal Mask
+                </p>
+                <p class="text-sm text-muted mt-1">
+                  Predicting a horizon rather than a next word, and what the
+                  mask has to forbid when time is real.
+                </p>
+              </div>
+            </div>
+          </a>
+        </div>
+
+        <p
+          class="text-xs uppercase tracking-[0.2em] text-c3 font-semibold mt-16 mb-6"
+        >
+          Part II &nbsp;&middot;&nbsp; When the clock is not a ruler
+        </p>
+
+        <div class="space-y-6">
+          <a href="topics/position_as_proxy.html" class="block group">
+            <div class="flex items-baseline gap-4">
+              <span class="text-sm text-c3 font-medium">06</span>
+              <div>
+                <p
+                  class="text-lg font-medium group-hover:text-c3 transition-colors"
+                >
+                  Position Is Only a Proxy for Time
+                </p>
+                <p class="text-sm text-muted mt-1">
+                  Every positional encoding we know counts steps. It stands in
+                  for time only while the steps are evenly spaced.
+                </p>
+              </div>
+            </div>
+          </a>
+
+          <hr class="border-gray-200 dark:border-gray-800" />
+
+          <a href="topics/irregular_series.html" class="block group">
+            <div class="flex items-baseline gap-4">
+              <span class="text-sm text-c3 font-medium">07</span>
+              <div>
+                <p
+                  class="text-lg font-medium group-hover:text-c3 transition-colors"
+                >
+                  The Irregular Series
+                </p>
+                <p class="text-sm text-muted mt-1">
+                  Uneven gaps, missing readings, and channels that are never
+                  measured at the same instant. Three problems, not one.
+                </p>
+              </div>
+            </div>
+          </a>
+
+          <hr class="border-gray-200 dark:border-gray-800" />
+
+          <a href="topics/repairs.html" class="block group">
+            <div class="flex items-baseline gap-4">
+              <span class="text-sm text-c3 font-medium">08</span>
+              <div>
+                <p
+                  class="text-lg font-medium group-hover:text-c3 transition-colors"
+                >
+                  The Repairs That Do Not Hold
+                </p>
+                <p class="text-sm text-muted mt-1">
+                  Binning, forward filling, imputing, and feeding the gap as a
+                  feature. Each one taken seriously, and each one broken.
+                </p>
+              </div>
+            </div>
+          </a>
+
+          <hr class="border-gray-200 dark:border-gray-800" />
+
+          <a href="topics/time_embedding.html" class="block group">
+            <div class="flex items-baseline gap-4">
+              <span class="text-sm text-c3 font-medium">09</span>
+              <div>
+                <p
+                  class="text-lg font-medium group-hover:text-c3 transition-colors"
+                >
+                  Embedding Continuous Time
+                </p>
+                <p class="text-sm text-muted mt-1">
+                  A positional encoding that accepts any real $t$: one linear
+                  term, a bank of sines, and learnable frequencies.
+                </p>
+              </div>
+            </div>
+          </a>
+        </div>
+
+        <p
+          class="text-xs uppercase tracking-[0.2em] text-c3 font-semibold mt-16 mb-6"
+        >
+          Part III &nbsp;&middot;&nbsp; Multi-time attention
+        </p>
+
+        <div class="space-y-6">
+          <a href="topics/attention_as_interpolation.html" class="block group">
+            <div class="flex items-baseline gap-4">
+              <span class="text-sm text-c3 font-medium">10</span>
+              <div>
+                <p
+                  class="text-lg font-medium group-hover:text-c3 transition-colors"
+                >
+                  Attention as Interpolation
+                </p>
+                <p class="text-sm text-muted mt-1">
+                  Score time against time, blend the measurements. The softmax
+                  weights become a similarity kernel the model learns.
+                </p>
+              </div>
+            </div>
+          </a>
+
+          <hr class="border-gray-200 dark:border-gray-800" />
+
+          <a href="topics/reference_points.html" class="block group">
+            <div class="flex items-baseline gap-4">
+              <span class="text-sm text-c3 font-medium">11</span>
+              <div>
+                <p
+                  class="text-lg font-medium group-hover:text-c3 transition-colors"
+                >
+                  Queries You Choose
+                </p>
+                <p class="text-sm text-muted mt-1">
+                  Nothing says a query must come from the data. Ask at a fixed
+                  set of reference times and the output stops being ragged.
+                </p>
+              </div>
+            </div>
+          </a>
+
+          <hr class="border-gray-200 dark:border-gray-800" />
+
+          <a href="topics/missingness.html" class="block group">
+            <div class="flex items-baseline gap-4">
+              <span class="text-sm text-c3 font-medium">12</span>
+              <div>
+                <p
+                  class="text-lg font-medium group-hover:text-c3 transition-colors"
+                >
+                  Missingness Without Imputation
+                </p>
+                <p class="text-sm text-muted mt-1">
+                  One softmax per channel over only what that channel actually
+                  recorded, and a second output track that counts.
+                </p>
+              </div>
+            </div>
+          </a>
+
+          <hr class="border-gray-200 dark:border-gray-800" />
+
+          <a href="topics/mtan_network.html" class="block group">
+            <div class="flex items-baseline gap-4">
+              <span class="text-sm text-c3 font-medium">13</span>
+              <div>
+                <p
+                  class="text-lg font-medium group-hover:text-c3 transition-colors"
+                >
+                  The mTAN Network
+                </p>
+                <p class="text-sm text-muted mt-1">
+                  The same module run in both directions, a latent state per
+                  reference point, and the loss that trains it.
+                </p>
+              </div>
+            </div>
+          </a>
+
+          <hr class="border-gray-200 dark:border-gray-800" />
+
+          <a href="topics/building_mtan.html" class="block group">
+            <div class="flex items-baseline gap-4">
+              <span class="text-sm text-c3 font-medium">14</span>
+              <div>
+                <p
+                  class="text-lg font-medium group-hover:text-c3 transition-colors"
+                >
+                  Building One
+                </p>
+                <p class="text-sm text-muted mt-1">
+                  Multi-time attention in sixty lines, trained on a sparse
+                  series, with its interpolations plotted against the truth.
+                </p>
+              </div>
+            </div>
+          </a>
+
+          <hr class="border-gray-200 dark:border-gray-800" />
+
+          <a href="topics/what_it_costs.html" class="block group">
+            <div class="flex items-baseline gap-4">
+              <span class="text-sm text-c3 font-medium">15</span>
+              <div>
+                <p
+                  class="text-lg font-medium group-hover:text-c3 transition-colors"
+                >
+                  What It Buys and What It Costs
+                </p>
+                <p class="text-sm text-muted mt-1">
+                  Reading the learned kernel, the ablations that justify it, and
+                  the two things this design cannot do.
+                </p>
+              </div>
+            </div>
+          </a>
+        </div>
+      </div>
+    </section>
+
+    <!-- Footer -->
+    <footer class="border-t border-gray-200 dark:border-gray-800 py-8 px-6">
+      <div class="max-w-2xl mx-auto text-sm text-muted">
+        <p>Attention Over Time</p>
+      </div>
+    </footer>
+  </body>
+</html>

@@ -1,0 +1,135 @@
+/* ==========================================================================
+   Palette
+   c1  #000000  black          text, structure, axes, queries
+   c2  #233D4D  deep slate     keys, structural emphasis, dark ground
+   c3  #FE7F2D  orange         values, links, the operative step, strongest highlight
+   c4  #EAECF0  cool grey      panel fills, backgrounds
+
+   Emphasis ladder for highlights: c3 > c2 > c1 > c4.
+   Orange is the only accent hue in this palette, so it takes the top slot.
+   ========================================================================== */
+
+/* Highlight markers, ordered by emphasis: c3 > c2 > c1 > c4 */
+.hl-c3 {
+  background: linear-gradient(180deg, transparent 10%, rgba(254, 127, 45, 0.28) 40%, rgba(254, 127, 45, 0.28) 85%, transparent 85%) !important;
+  padding: 0.05em 0.15em !important;
+}
+.hl-c2 {
+  background: linear-gradient(180deg, transparent 10%, rgba(35, 61, 77, 0.16) 40%, rgba(35, 61, 77, 0.16) 85%, transparent 85%) !important;
+  padding: 0.05em 0.15em !important;
+}
+.hl-c1 {
+  background: linear-gradient(180deg, transparent 10%, rgba(0, 0, 0, 0.10) 40%, rgba(0, 0, 0, 0.10) 85%, transparent 85%) !important;
+  padding: 0.05em 0.15em !important;
+}
+/* c4 is nearly white, so on light backgrounds it reads as a soft grey band
+   rather than a colour wash. Lowest emphasis in the ladder. */
+.hl-c4 {
+  background: linear-gradient(180deg, transparent 10%, #EAECF0 40%, #EAECF0 85%, transparent 85%) !important;
+  box-shadow: inset 0 -2px 0 rgba(254, 127, 45, 0.45) !important;
+  padding: 0.05em 0.15em !important;
+}
+
+/* Dark mode: more opacity, and c4 inverts to a faint light wash */
+.dark .hl-c3 { background: linear-gradient(180deg, transparent 10%, rgba(254, 127, 45, 0.38) 10%, rgba(254, 127, 45, 0.38) 85%, transparent 85%) !important; }
+.dark .hl-c2 { background: linear-gradient(180deg, transparent 10%, rgba(122, 168, 196, 0.30) 10%, rgba(122, 168, 196, 0.30) 85%, transparent 85%) !important; }
+.dark .hl-c1 { background: linear-gradient(180deg, transparent 10%, rgba(255, 255, 255, 0.14) 10%, rgba(255, 255, 255, 0.14) 85%, transparent 85%) !important; }
+.dark .hl-c4 {
+  background: linear-gradient(180deg, transparent 10%, rgba(234, 236, 240, 0.12) 10%, rgba(234, 236, 240, 0.12) 85%, transparent 85%) !important;
+  box-shadow: inset 0 -2px 0 rgba(254, 127, 45, 0.5) !important;
+}
+
+/* Dark mode: MathJax text colour */
+.dark mjx-container { color: #e5e7eb !important; }
+
+/* Panel: the natural home for c4, used for asides and worked examples */
+.panel-c4 {
+  background: #EAECF0;
+  border: 1px solid rgba(35, 61, 77, 0.18);
+}
+.dark .panel-c4 {
+  background: rgba(234, 236, 240, 0.06);
+  border-color: rgba(254, 127, 45, 0.22);
+}
+
+/* Figures in dark mode.
+   The SVGs are built with black text on a transparent ground, so on a dark
+   page they disappear. Rather than shipping two builds of every figure, each
+   one gets its own light card. */
+.dark figure img {
+  background: #FFFFFF;
+  border-radius: 10px;
+  padding: 10px;
+}
+
+/* Cover.
+   The grid and the gradient are both background-images, so they must live in a
+   single declaration. Splitting them across two rules makes the later one
+   silently erase the earlier one. */
+.gradient-bg {
+  background-image: linear-gradient(
+    135deg,
+    #000000 0%,
+    #12222C 24%,
+    #233D4D 50%,
+    #FE7F2D 86%,
+    #EAECF0 100%
+  );
+  background-size: cover;
+}
+.cover-grid {
+  background-image:
+    linear-gradient(rgba(255, 255, 255, 0.05) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.05) 1px, transparent 1px);
+  background-size: 60px 60px;
+}
+.gradient-bg.cover-grid {
+  background-image:
+    linear-gradient(rgba(255, 255, 255, 0.05) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.05) 1px, transparent 1px),
+    linear-gradient(
+      135deg,
+      #000000 0%,
+      #12222C 24%,
+      #233D4D 50%,
+      #FE7F2D 86%,
+      #EAECF0 100%
+    );
+  background-size:
+    60px 60px,
+    60px 60px,
+    cover;
+}
+.glow-orb {
+  position: absolute;
+  border-radius: 50%;
+  filter: blur(80px);
+  opacity: 0.4;
+}
+
+/* Attention-matrix helper: a square heat cell grid used in a few pages
+   where a TikZ figure would be overkill. */
+.attn-grid {
+  display: grid;
+  gap: 2px;
+}
+.attn-cell {
+  aspect-ratio: 1 / 1;
+  border-radius: 3px;
+  background: #FE7F2D;
+}
+
+/* Observation ticks: a one-dimensional strip of marks on a time axis, used
+   on the pages where the point is *when* something was measured, not what. */
+.tick-strip {
+  position: relative;
+  height: 34px;
+  border-bottom: 1px solid rgba(35, 61, 77, 0.35);
+}
+.tick-strip span {
+  position: absolute;
+  bottom: 0;
+  width: 2px;
+  height: 14px;
+  background: #FE7F2D;
+}
