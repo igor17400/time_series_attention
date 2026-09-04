@@ -33,8 +33,10 @@ hours, and observations are always drawn as ticks on it.
 
 | name | shows |
 |------|-------|
-| `token_information` | One embedding row for *mouse* against one scalar heart-rate reading of 78. The word carries a whole vector of meaning, the reading carries a number that means nothing without its neighbours. |
-| `quadratic_wall` | Sequence length against attention cost, with a sentence (n = 5), a paragraph (n = 500), and 48 hours of minute-sampled vitals (n = 2880) marked on it. |
+| `token_information` | **Drawn.** Left: the token *stable* and the embedding it maps to, the same vector wherever it sits. Right: three pulse trajectories over the hour before minute 300, falling from 120, climbing from 60, and flat at 78, all meeting at 78 and collapsing onto the identical row $[78, 37.2, 2.4]$. Shows that the query and the key are built from an instant, so three clinically different patients are indistinguishable to the mechanism. |
+
+`quadratic_wall` was dropped. A curve of $n^2$ restates the numbers already in the
+prose (400 scores against eight million) and shows no mechanism.
 
 ## 03 Patches
 

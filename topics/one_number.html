@@ -1,0 +1,186 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>One Number Is Not a Word &mdash; Attention Over Time</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            fontFamily: {
+              sans: ["Inter", "system-ui", "sans-serif"],
+            },
+            colors: {
+              ink: "#000000",
+              surface: "#F7F8FA",
+              muted: "#5F6B75",
+              c1: "#000000",
+              c2: "#233D4D",
+              c3: "#FE7F2D",
+              c4: "#EAECF0",
+            },
+          },
+        },
+      };
+    </script>
+    <script src="../theme.js"></script>
+    <script>
+      window.MathJax = {
+        tex: {
+          inlineMath: [["$", "$"]],
+          displayMath: [["$$", "$$"]],
+        },
+      };
+    </script>
+    <script
+      id="MathJax-script"
+      async
+      src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"
+    ></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="../styles.css" />
+  </head>
+  <body
+    class="bg-surface text-ink font-sans antialiased dark:bg-[#0B1319] dark:text-gray-100"
+  >
+    <article class="max-w-3xl mx-auto px-6 py-20">
+      <!-- Back link -->
+      <a
+        href="../index.html"
+        class="text-sm text-muted hover:text-c3 transition-colors"
+        >&larr; Back to syllabus</a
+      >
+
+      <!-- Title -->
+      <header class="mt-8 mb-16">
+        <p class="text-sm text-c3 font-medium uppercase tracking-widest mb-3">
+          02 &nbsp;&middot;&nbsp; Attention Over Time
+        </p>
+        <h1 class="text-4xl md:text-5xl font-bold leading-tight mb-4">
+          One Number Is Not a Word
+        </h1>
+        <p class="text-lg text-muted leading-relaxed">
+          A single reading carries almost no meaning.
+        </p>
+      </header>
+
+      <div
+        class="space-y-12 text-gray-700 dark:text-gray-300 leading-relaxed text-[18px]"
+      >
+        <section>
+          <p>
+            Attention is concerned in comparing rows against rows, on a sentence
+            that is a sensible question to ask, because a token turns up already
+            carrying its meaning. The vector for
+            <em>stable</em> means <em>stable</em> wherever in the sentence it
+            happens to sit. Now ask the same question of minute 300. Its row is
+            $[78,\, 37.2,\, 2.4]$, minute 301 is $[79,\, 37.2,\, 2.4]$, and
+            minute 302 is $[78,\, 37.3,\, 2.4]$. Scoring any of these against
+            any other is arithmetic that runs perfectly well and tells us
+            nothing.
+            <span class="hl-c3"
+              >A pulse of 78 does not mean anything on its own. It means
+              something relative to what the pulse was an hour ago, and that is
+              nowhere in the row</span
+            >.
+          </p>
+
+          <p class="mt-4">
+            There is an obvious reply to that. Relating one row to other rows is
+            precisely what attention is for. A specific row, like minute 300,
+            doesn't need to hold its own history because the mechanism fetches
+            it via query and key interactions with past rows. The model learns
+            to weight historical data, such as a pulse reading from an hour ago,
+            as needed. A narrow three-number row doesn't block score computation
+            or stop gradient descent from finding valuable past data. The
+            context missing from a single row is still present in the full
+            sequence, which the attention mechanism reads in its entirety.
+          </p>
+
+          <p class="mt-4">
+            Follow that through and it fails at the first step. A query is a
+            projection of a row, so whatever minute 300 is able to ask, it has
+            to ask using $[78,\, 37.2,\, 2.4]$ and nothing else. Picture three
+            ways the patient might have arrived at that minute: a pulse that has
+            fallen from 120 over the past hour, a pulse that has climbed from
+            60, and a pulse that has sat at 78 since admission. All three write
+            the same row at minute 300, so all three build the same query, wear
+            the same key, and produce the same scores against every other minute
+            in the stay.
+            <span class="hl-c3"
+              >Attention can compare only what the rows contain, and what a row
+              contains is a reading, never a trend</span
+            >.
+          </p>
+
+          <figure class="my-10 flex flex-col items-center">
+            <img
+              src="../figures/build/token_information.svg"
+              alt="On the left, the token stable and the embedding vector it maps to. On the right, three different pulse trajectories over the hour before minute 300, one falling from 120, one climbing from 60 and one flat at 78, all meeting at 78 and producing the identical row 78, 37.2, 2.4."
+              class="w-full max-w-2xl"
+            />
+            <figcaption class="mt-3 text-sm text-muted text-center max-w-xl">
+              The token on the left arrives with its meaning attached. The three
+              courses on the right are three different patients as far as any
+              clinician is concerned, and they hand attention the same row, so
+              they hand it the same query and the same key.
+            </figcaption>
+          </figure>
+
+          <p class="mt-4">
+            There's also the concern regarding cost, attention scores every row
+            against every row, so 2880 rows is $2880^2$ pairs, a little over
+            eight million scores, to read two days of one patient. A
+            twenty-token sentence costs 400. And had we answered the first of
+            the three questions in
+            <a
+              href="tokens_to_timestamps.html"
+              class="text-c3 hover:text-c2 transition-colors"
+              >section 01</a
+            >
+            with "one second" rather than "one minute", the same two days would
+            be 172,800 rows and close to thirty billion pairs. The
+            <b>cost grows with the square of how finely we sample</b>, and the
+            information in a single row does not grow at all.
+          </p>
+
+          <p class="mt-4">
+            Put the two costs together and they turn out to be one complaint.
+            <b>Sampling more finely adds no information to a row</b>, it only
+            adds rows, and every row we add is paid for twice over in the score
+            matrix. Sampling more coarsely thins the bill but discards the
+            detail we were sampling for in the first place. Neither direction
+            helps, because neither one changes what a row <em>is</em>. The
+            problem was never the rate. It is that we chose an instant as the
+            unit, and an instant is the one thing in a signal that carries no
+            shape .
+          </p>
+        </section>
+      </div>
+
+      <!-- Navigation -->
+      <nav
+        class="mt-20 pt-8 border-t border-gray-200 dark:border-gray-800 flex justify-between text-sm"
+      >
+        <a
+          href="tokens_to_timestamps.html"
+          class="text-muted hover:text-c3 transition-colors"
+          >&larr; 01 &nbsp;&middot;&nbsp; From Tokens to Timestamps</a
+        >
+        <a
+          href="patching.html"
+          class="text-muted hover:text-c3 transition-colors"
+          >03 &nbsp;&middot;&nbsp; Patches &rarr;</a
+        >
+      </nav>
+    </article>
+  </body>
+</html>
