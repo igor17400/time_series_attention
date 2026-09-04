@@ -1,0 +1,213 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Forecasting Under a Causal Mask &mdash; Attention Over Time</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            fontFamily: {
+              sans: ["Inter", "system-ui", "sans-serif"],
+            },
+            colors: {
+              ink: "#000000",
+              surface: "#F7F8FA",
+              muted: "#5F6B75",
+              c1: "#000000",
+              c2: "#233D4D",
+              c3: "#FE7F2D",
+              c4: "#EAECF0",
+            },
+          },
+        },
+      };
+    </script>
+    <script src="../theme.js"></script>
+    <script>
+      window.MathJax = {
+        tex: {
+          inlineMath: [["$", "$"]],
+          displayMath: [["$$", "$$"]],
+        },
+      };
+    </script>
+    <script
+      id="MathJax-script"
+      async
+      src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"
+    ></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="../styles.css" />
+  </head>
+  <body
+    class="bg-surface text-ink font-sans antialiased dark:bg-[#0B1319] dark:text-gray-100"
+  >
+    <article class="max-w-3xl mx-auto px-6 py-20">
+      <!-- Back link -->
+      <a
+        href="../index.html"
+        class="text-sm text-muted hover:text-c3 transition-colors"
+        >&larr; Back to syllabus</a
+      >
+
+      <!-- Title -->
+      <header class="mt-8 mb-16">
+        <p class="text-sm text-c3 font-medium uppercase tracking-widest mb-3">
+          05 &nbsp;&middot;&nbsp; Attention Over Time
+        </p>
+        <h1 class="text-4xl md:text-5xl font-bold leading-tight mb-4">
+          Forecasting Under a Causal Mask
+        </h1>
+        <p class="text-lg text-muted leading-relaxed">
+          Predicting a horizon rather than a next word.
+        </p>
+      </header>
+
+      <div
+        class="space-y-12 text-gray-700 dark:text-gray-300 leading-relaxed text-[18px]"
+      >
+        <section>
+          <p>
+            Applying standard attention to time-series forecasting introduces
+            severe lookahead bias into the patient's pulse predictions. Because
+            the attention mechanism compares every token against all others, the
+            output at hour 3 aggregates data from future tokens like hour 40. A
+            model trained on this leaked data will achieve flawless metrics
+            during offline evaluation but fail completely at the bedside, where
+            future events remain inaccessible.
+          </p>
+
+          <p class="mt-4">
+            The repair is the same one language models already use. Before the
+            softmax, add $-\infty$ to every score that points forward, so the
+            row for hour 3 keeps hours 1, 2 and 3 and loses everything after it.
+            Those entries come out of the softmax as zeros, and the output for
+            hour 3 is then built only from hours that had already happened while
+            hour 3 was the present. Nothing else changes, we have the same $Q$,
+            $K$ and $V$, the same $N \times N$ table of scores, with one
+            triangle of it struck out. It is also free, in the sense that every
+            token in the sequence becomes a training example of its own. Hour 3
+            predicts hour 4 while hour 20 predicts hour 21, all in the same
+            pass.
+          </p>
+
+          <figure class="my-10 flex flex-col items-center">
+            <img
+              src="../figures/build/causal_mask_grid.svg"
+              alt="A six by six table of attention scores. Rows are the hour doing the reading, columns the hour being read. Every cell above the diagonal holds minus infinity, every cell on or below it is filled. Row three is outlined, keeping columns one, two and three."
+              class="w-full max-w-2xl"
+            />
+            <figcaption class="mt-3 text-sm text-muted text-center max-w-xl">
+              The table of scores with one triangle removed. Reading along the
+              outlined row, hour 3 can score itself and the two hours before it,
+              and nothing else.
+            </figcaption>
+          </figure>
+
+          <p class="mt-4">
+            What the mask idea gives us is the ability to predict hour 4 given
+            hours 1 to 3, but normally the interest is to forecast for the
+            entire subsequent six hours simultaneously. A logical approach to
+            extract a six-hour forecast from a single-step model is to run the
+            process iteratively six times. Predict hour 4, append the prediction
+            to the sequence, predict hour 5 from a history that now contains our
+            own guess, and carry on. By the time the model reaches the ninth
+            hour, it is processing five hours of invented data alongside just
+            three hours of factual input. Since every training step relied on
+            actual history while bedside application relies heavily on synthetic
+            inputs, the resulting errors do not simply accumulate. Instead, they
+            compound within an operational environment that the model was not
+            trained to handle.
+          </p>
+
+          <p class="mt-4">
+            The alternative is to stop producing one step at a time. Read the
+            lookback window once, and let the
+            <b>head emit the whole horizon in a single shot</b>. One linear
+            layer from what attention produced to the $T$ minutes we were asked
+            for, with six hours meaning $T = 6 \times 60 = 360$. Nothing is
+            appended to the sequence and, arguably more importantly, no
+            prediction is read back. The downside of this is its rigidity, a
+            head built for six hours predicts six hours, and wanting twelve
+            means training a second one.
+          </p>
+
+          <p class="mt-4">
+            This adjustment implicitly eliminates the need for a causal mask.
+            Earlier, the issue of data leakage occurred when the 3rd hour
+            accessed data from the 40th hour. This was problematic because the
+            model used the 3rd hour to predict the 4th, which occurs much
+            earlier than the 40th. When utilizing a direct output head, no
+            element within the input window is responsible for predicting
+            another element within that same window. For instance, if the input
+            spans hours 1 through 48 and the prediction target covers hours 49
+            to 54, every encoded token exists firmly in the past relative to the
+            requested forecast. The 3rd hour is completely free to incorporate
+            information from the 40th hour because the 40th hour has already
+            occurred by the time the forecast is generated. Ultimately, the
+            masking technique was not fundamentally required by the forecasting
+            task itself. It was a byproduct of
+            <b>forcing each token to predict the immediate next step</b>, and
+            abandoning that specific method removes the necessity for the mask
+            entirely.
+          </p>
+
+          <figure class="my-10 flex flex-col items-center">
+            <img
+              src="../figures/build/horizon_no_mask.svg"
+              alt="Two arrangements side by side. On the left, six hours in a row where hour three produces hour four and is forbidden by a crossed out arrow from reading hour six. On the right, the hours one to 48 read each other freely in both directions, pass through a head, and produce hours 49 to 54."
+              class="w-full"
+            />
+            <figcaption class="mt-3 text-sm text-muted text-center max-w-2xl">
+              On the left the target sits inside the window, so reading forward
+              is reading the answer. On the right the target sits outside it, so
+              every hour the encoder holds is already in the past, and the arrow
+              that had to be forbidden is now harmless.
+            </figcaption>
+          </figure>
+
+          <p class="mt-4">
+            Note that this does not mean we should drop the mask everywhere. It
+            goes here only because we drew a hard line between a window we read
+            and a horizon we produce, and plenty of models cannot draw that
+            line. A monitor that has to issue a fresh six-hour forecast every
+            minute, trained on every prefix of the stay at once, has its targets
+            back inside the sequence, and the triangle comes back with them. So
+            does anything that generates step by step.
+            <span class="hl-c3"
+              >The fundamental issue is not whether temporal attention
+              inherently requires causality. Instead, the deciding factor is
+              simply whether the target being predicted falls within the input
+              context or exists outside of it</span
+            >.
+          </p>
+        </section>
+      </div>
+
+      <!-- Navigation -->
+      <nav
+        class="mt-20 pt-8 border-t border-gray-200 dark:border-gray-800 flex justify-between text-sm"
+      >
+        <a
+          href="channels.html"
+          class="text-muted hover:text-c3 transition-colors"
+          >&larr; 04 &nbsp;&middot;&nbsp; Many Channels, One Clock</a
+        >
+        <a
+          href="position_as_proxy.html"
+          class="text-muted hover:text-c3 transition-colors"
+          >06 &nbsp;&middot;&nbsp; Position Is Only a Proxy for Time &rarr;</a
+        >
+      </nav>
+    </article>
+  </body>
+</html>

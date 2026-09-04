@@ -61,7 +61,8 @@ prose (400 scores against eight million) and shows no mechanism.
 
 | name | shows |
 |------|-------|
-| `horizon_mask` | The lookback window and the horizon on one axis, with the mask that separates them. Contrasts one-step autoregression with a direct multi-step head. |
+| `causal_mask_grid` | **Drawn.** A $6 \times 6$ score table, rows labelled *the hour doing the reading* and columns *the hour being read*. Upper triangle filled with $-\infty$, lower triangle and diagonal filled. Row 3 outlined and annotated. Footnote states that $-\infty$ is added before the softmax. |
+| `horizon_no_mask` | **Drawn.** Two panels. Left, one step at a time: six hours, an arrow from hour 3 to hour 4 labelled as what it must produce, and a crossed-out dashed arc from hour 3 to hour 6 as what it must not read. Right, the whole horizon: hours 1 to 48 with a double-headed arc reading either direction, into a head, out to hours 49 to 54 in orange. Carries the section's claim that the mask answers the recipe, not the task. |
 
 ## 06 Position Is Only a Proxy for Time
 
