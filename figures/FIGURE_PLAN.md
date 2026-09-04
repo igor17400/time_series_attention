@@ -53,7 +53,9 @@ prose (400 scores against eight million) and shows no mechanism.
 
 | name | shows |
 |------|-------|
-| `channel_mixing` | Two arrangements side by side. Left, channels concatenated into one token per timestep so attention mixes them. Right, each channel run through the same attention on its own. What each one can and cannot express. |
+| `channel_stacking` | **Drawn.** Heart rate, temperature and lactate on one clock, all three climbing during a highlighted hour. Dashed guides carry the three 60-minute windows down into one row of $D \times P = 180$ numbers laid end to end, then a learned $(D \cdot P) \times d_{\text{model}}$ matrix turns that row into one token. Placed at the case *for* stacking, so the reader sees the cross-channel event landing inside a single token. |
+| `channel_fork` | **Drawn.** The two arrangements as two pipelines with identical stages, tokens then attention then outputs then head, so only the difference is visible. Left, stacking: one sequence, every token striped with all three channel colours, marked *the channels meet here* at the token row. Right, independence: three single-colour sequences through the same attention, marked *and here* at the head. Placed after the verdict paragraph, whose claim is that the fork is about where the channels meet. |
+| `channel_mixing` | Superseded by `channel_fork`, not drawn. Left, channels concatenated into one token per timestep so attention mixes them. Right, each channel run through the same attention on its own. What each one can and cannot express. |
 
 ## 05 Forecasting Under a Causal Mask
 

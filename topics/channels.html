@@ -1,0 +1,237 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Many Channels, One Clock &mdash; Attention Over Time</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            fontFamily: {
+              sans: ["Inter", "system-ui", "sans-serif"],
+            },
+            colors: {
+              ink: "#000000",
+              surface: "#F7F8FA",
+              muted: "#5F6B75",
+              c1: "#000000",
+              c2: "#233D4D",
+              c3: "#FE7F2D",
+              c4: "#EAECF0",
+            },
+          },
+        },
+      };
+    </script>
+    <script src="../theme.js"></script>
+    <script>
+      window.MathJax = {
+        tex: {
+          inlineMath: [["$", "$"]],
+          displayMath: [["$$", "$$"]],
+        },
+      };
+    </script>
+    <script
+      id="MathJax-script"
+      async
+      src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"
+    ></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="../styles.css" />
+  </head>
+  <body
+    class="bg-surface text-ink font-sans antialiased dark:bg-[#0B1319] dark:text-gray-100"
+  >
+    <article class="max-w-3xl mx-auto px-6 py-20">
+      <!-- Back link -->
+      <a
+        href="../index.html"
+        class="text-sm text-muted hover:text-c3 transition-colors"
+        >&larr; Back to syllabus</a
+      >
+
+      <!-- Title -->
+      <header class="mt-8 mb-16">
+        <p class="text-sm text-c3 font-medium uppercase tracking-widest mb-3">
+          04 &nbsp;&middot;&nbsp; Attention Over Time
+        </p>
+        <h1 class="text-4xl md:text-5xl font-bold leading-tight mb-4">
+          Many Channels, One Clock
+        </h1>
+        <p class="text-lg text-muted leading-relaxed">
+          How to deal with several variables measured at once.
+        </p>
+      </header>
+
+      <div
+        class="space-y-12 text-gray-700 dark:text-gray-300 leading-relaxed text-[18px]"
+      >
+        <section>
+          <p>
+            The matrix in
+            <a
+              href="tokens_to_timestamps.html"
+              class="text-c3 hover:text-c2 transition-colors"
+              >section 01</a
+            >
+            put all three signals into the same row, so minute 300 arrived as
+            $[78,\, 37.2,\, 2.4]$ which consists of one row, three columns, the
+            three channels bound together in a single object.
+            <a
+              href="patching.html"
+              class="text-c3 hover:text-c2 transition-colors"
+              >Section 03</a
+            >
+            then defined a patch as sixty consecutive numbers taken from one
+            signal, which is the opposite arrangement. Both strategies are
+            different so let's now understand how we can in a certain way join
+            them.
+          </p>
+
+          <p class="mt-4">
+            Write the two down and the difference shows up in the shapes.
+          </p>
+
+          <ul class="mt-3 ml-6 space-y-4 list-disc text-[18px]">
+            <li>
+              <b>Stacking.</b> One patch covers all three signals at once, that
+              is sixty minutes of pulse, sixty of temperature and sixty of
+              lactate, $3 \times 60 = 180$ numbers flattened and projected into
+              a single token. The sequence is $N$ tokens long, and every token
+              carries what all three signals were doing during its hour.
+            </li>
+            <li>
+              <b>Keeping them apart.</b> Three sequences of $N$ tokens, one per
+              signal, each patch still $P$ numbers wide. Each sequence goes
+              through the same attention with the same weights, and no token
+              ever holds more than one signal.
+            </li>
+          </ul>
+
+          <p class="mt-4">
+            In general, with $D$ channels, the first arrangement gives one
+            sequence of tokens built from $D \times P$, and the second gives $D$
+            sequences of tokens built from $P$.
+          </p>
+
+          <p class="mt-4">
+            Stacking looks like the better of the two, here's the main argument.
+            The patient is one system, not three. A pulse climbing while the
+            temperature climbs and the lactate climbs is the sort of joint
+            movement a clinician reads as deterioration, and no one of those
+            three signals shows it alone. Under stacking the token for a given
+            hour holds all three windows at once, so the projection can learn a
+            direction that responds to the three of them moving together, and
+            attention can then match that hour against every other hour on
+            exactly that basis. Keep the channels apart and no token can
+            represent the event at all, because no token ever sees more than one
+            signal.
+          </p>
+
+          <figure class="my-10 flex flex-col items-center">
+            <img
+              src="../figures/build/channel_stacking.svg"
+              alt="Three channels drawn on one time axis, heart rate, temperature and lactate, all three rising during the same highlighted hour. The three sixty minute windows from that hour are laid end to end into a row of 180 numbers, which a learned matrix turns into a single token of width d model."
+              class="w-full"
+            />
+            <figcaption class="mt-3 text-sm text-muted text-center max-w-2xl">
+              The three windows cut from the same hour are laid end to end and
+              projected together, so the rise that shows up in all three signals
+              at once ends up inside one token. That is the whole case for
+              stacking so that the event and the token have the same boundaries.
+            </figcaption>
+          </figure>
+
+          <p class="mt-4">
+            While the logic seems solid, models relying on this approach
+            typically fail due to two main issues. <b>The first</b> is that a
+            single projection now has to serve three different signals. The
+            pulse arrives in beats per minute and lives somewhere between 40 and
+            180, the temperature in degrees between 35 and 41, the lactate in
+            millimoles per litre between 0.5 and 15. One $180 \times
+            d_{\text{model}}$ matrix has to handle all three at once, and every
+            weight it spends on reading the pulse is a weight it is also using
+            on the lactate. <b>The second</b> is arithmetic about data. Keeping
+            the channels apart hands the same attention three sequences per
+            patient instead of one, so the same weights are trained on three
+            times as many examples, and whatever the model works out about how a
+            signal moves over an hour is learned once and used on all three.
+          </p>
+
+          <p class="mt-4">
+            So independence is the usual answer, but treating these signals
+            independently does come with a cost. In a separated setup, a pulse
+            token is never directly compared to a temperature token through a
+            query because the sequences remain isolated within the attention
+            mechanism. The correlated event shown in the previous figure exists
+            within the raw data but is absent from any individual token. If the
+            model needs to utilize this relationship,
+            <b>the three signals must be merged at a different stage</b>,
+            typically within the final output head. This final aggregation is
+            much less precise than the attention mechanism, which is capable of
+            dynamically weighing the hours against one another.
+          </p>
+          <p class="mt-4">
+            Ultimately, the decision is not about whether the model detects the
+            interaction. The real choice is whether to calculate that
+            interaction within every individual token or to delay the process
+            until the final output stage.
+          </p>
+
+          <figure class="my-10 flex flex-col items-center">
+            <img
+              src="../figures/build/channel_fork.svg"
+              alt="Two pipelines side by side. On the left, stacking: one sequence whose tokens each carry three coloured stripes, one per channel, passing through attention and then a head. On the right, channel independence: three separate sequences of single coloured tokens, each run through the same attention, meeting only at the head."
+              class="w-full"
+            />
+            <figcaption class="mt-3 text-sm text-muted text-center max-w-2xl">
+              The same four stages on both sides, and only one thing differs. On
+              the left the three colours are already inside every token, so
+              attention compares hours that each know about all three signals.
+              On the right the colours stay apart the whole way down and meet
+              for the first time at the head, once every comparison has already
+              been made.
+            </figcaption>
+          </figure>
+        
+          <p class="mt-4">
+            Either way we now have a sequence of tokens, and either way the
+            figures have been quietly allowing something. In all of them
+            attention compares every token against every other one, so the
+            output for hour 3 is built partly out of the token for hour 40. If
+            the job is to describe a stay that has already happened, that is
+            exactly what we want. If the job is to say what happens next, it is
+            not, because the answer has been used to produce the guess. Nothing
+            we have built so far says which of those two we are doing, and the
+            next section is where that has to be decided.
+          </p>
+        </section>
+      </div>
+
+      <!-- Navigation -->
+      <nav
+        class="mt-20 pt-8 border-t border-gray-200 dark:border-gray-800 flex justify-between text-sm"
+      >
+        <a
+          href="patching.html"
+          class="text-muted hover:text-c3 transition-colors"
+          >&larr; 03 &nbsp;&middot;&nbsp; Patches</a
+        >
+        <a
+          href="forecasting.html"
+          class="text-muted hover:text-c3 transition-colors"
+          >05 &nbsp;&middot;&nbsp; Forecasting Under a Causal Mask &rarr;</a
+        >
+      </nav>
+    </article>
+  </body>
+</html>
