@@ -1,0 +1,283 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>The Irregular Series &mdash; Attention Over Time</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            fontFamily: {
+              sans: ["Inter", "system-ui", "sans-serif"],
+            },
+            colors: {
+              ink: "#000000",
+              surface: "#F7F8FA",
+              muted: "#5F6B75",
+              c1: "#000000",
+              c2: "#233D4D",
+              c3: "#FE7F2D",
+              c4: "#EAECF0",
+            },
+          },
+        },
+      };
+    </script>
+    <script src="../theme.js"></script>
+    <script>
+      window.MathJax = {
+        tex: {
+          inlineMath: [["$", "$"]],
+          displayMath: [["$$", "$$"]],
+        },
+      };
+    </script>
+    <script
+      id="MathJax-script"
+      async
+      src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"
+    ></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="../styles.css" />
+  </head>
+  <body
+    class="bg-surface text-ink font-sans antialiased dark:bg-[#0B1319] dark:text-gray-100"
+  >
+    <article class="max-w-3xl mx-auto px-6 py-20">
+      <!-- Back link -->
+      <a
+        href="../index.html"
+        class="text-sm text-muted hover:text-c3 transition-colors"
+        >&larr; Back to syllabus</a
+      >
+
+      <!-- Title -->
+      <header class="mt-8 mb-16">
+        <p class="text-sm text-c3 font-medium uppercase tracking-widest mb-3">
+          07 &nbsp;&middot;&nbsp; Attention Over Time
+        </p>
+        <h1 class="text-4xl md:text-5xl font-bold leading-tight mb-4">
+          The Irregular Series
+        </h1>
+        <p class="text-lg text-muted leading-relaxed">
+          Joining similar but different things.
+        </p>
+      </header>
+
+      <div
+        class="space-y-12 text-gray-700 dark:text-gray-300 leading-relaxed text-[18px]"
+      >
+        <section>
+          <p>
+            So far we have implicitly made a somewhat absurd assumption: that
+            the information we get about the heart arrives
+            <b>at the same granularity</b> as what we get for lactate. I am not
+            a doctor, but I would say this makes zero sense. This leads us to
+            put some more time into understanding not only the matrix but how
+            this data is generated. Heart rate comes off a bedside monitor, so
+            there is a reading most minutes, apart from the stretches where the
+            trace drops out while the patient is being washed or moved.
+            Temperature is written down by whoever is on the ward, which across
+            these 48 hours happened eleven times. Lactate is a laboratory
+            result, so blood has to be drawn, sent and run, and there are four
+            of them, at minutes 15, 380, 1120 and 2650. In summary, no two of
+            the three were ever recorded at the same instant, and nothing about
+            when any of them happened was decided by a clock.
+          </p>
+
+          <p class="mt-4">
+            Now go back to the row we have been carrying since
+            <a
+              href="tokens_to_timestamps.html"
+              class="text-c3 hover:text-c2 transition-colors"
+              >section 01</a
+            >. At minute 300 it read $[78,\, 37.2,\, 2.4]$ which represent a
+            pulse, a temperature, a lactate. The monitor did record a pulse at
+            minute 300. The nearest charted temperature belongs to some other
+            minute entirely. And the lactate readings sit at minutes 15 and 380,
+            so at minute 300 there is no lactate at all.
+            <span class="hl-c3"
+              >The 2.4 is not a measurement, it is a number we put there so that
+              the row would have three entries</span
+            >.
+          </p>
+
+          <p class="mt-4">
+            It is tempting to file all of this under <em>missing data</em> and
+            reach for a single repair. There are three separate problems here,
+            and they break different things.
+          </p>
+
+          <ol class="mt-3 ml-6 space-y-4 list-decimal text-[18px]">
+            <li>
+              <b>Uneven spacing within a channel.</b> The gaps between the four
+              lactate readings are 365, 740 and 1530 minutes, so knowing that a
+              reading is the third one tells us nothing about when it happened.
+              This is the complaint from
+              <a
+                href="position_as_proxy.html"
+                class="text-c3 hover:text-c2 transition-colors"
+                >section 06</a
+              >.
+            </li>
+            <li>
+              <b>Different rates across channels.</b> Roughly two thousand pulse
+              readings against eleven temperature readings against four lactate
+              readings, no single patch length suits all three at once, and the
+              $N \times P$ matrix from
+              <a
+                href="patching.html"
+                class="text-c3 hover:text-c2 transition-colors"
+                >section 03</a
+              >
+              has no shape that fits them together.
+            </li>
+            <li>
+              <b>No alignment between channels.</b> Choose any instant in the 48
+              hours and at most one of the three has a reading there, which
+              leaves the stacked token from
+              <a
+                href="channels.html"
+                class="text-c3 hover:text-c2 transition-colors"
+                >section 04</a
+              >
+              with nothing to be built out of.
+            </li>
+          </ol>
+
+          <figure class="my-10 flex flex-col items-center">
+            <img
+              src="../figures/build/three_problems.svg"
+              alt="Three lanes on one 48 hour axis. Heart rate is a dense comb of ticks with two gaps where the monitor dropped out. Temperature has eleven ticks. Lactate has four, at minutes 15, 380, 1120 and 2650. A dashed line marks minute 300, and a bracket shows that no lactate was recorded between minutes 15 and 380."
+              class="w-full"
+            />
+            <figcaption class="mt-3 text-sm text-muted text-center max-w-3xl">
+              The three problems in one picture: the gaps within a lane are
+              uneven, the three lanes carry wildly different numbers of
+              readings, and no tick in one lane lines up with a tick in another.
+              Follow the dashed line down and the pulse has a reading at minute
+              300 while the lactate has none within six hours of it.
+            </figcaption>
+          </figure>
+
+          <p class="mt-4">
+            Up to this point, our efforts have been around restructuring the
+            data to fit the mechanism. We grouped minutes into windows, combined
+            channels into single tokens or kept them separate, and shifted the
+            forecasting horizon out of the sequence and into a dedicated head.
+            Each of these adjustments succeeded strictly because a continuous
+            underlying grid was available to be manipulated. In this new
+            context, that structural grid does not exist. Any rectangular format
+            we attempt to create from this chart will naturally contain empty
+            cells that the clinical staff never recorded. Deciding to fill these
+            gaps is not merely a formatting choice. It involves artificially
+            generating numbers that no one ever measured, which is exactly the
+            process we applied to the 2.4 value.
+          </p>
+
+          <p class="mt-4">
+            This is not particular to the clinical settings. A weather station
+            transmits data until it freezes over, a telescope observes a start
+            only when the sky is clear and time permits, and so on. This final
+            point is particularly important to remember. The four lactate
+            readings were not taken arbitrarily. A medical professional ordered
+            each test due to a specific concern. Consequently, the actual timing
+            of these measurements contains valuable information.
+            <span class="hl-c3"
+              >A model that views these irregular intervals merely as errors to
+              be corrected is ultimately ignoring a critical portion of the
+              data</span
+            >.
+          </p>
+
+          <p class="mt-4">
+            Formally, each channel $d \in \{1, \dots, D\}$ carries its own list
+            of observations, of length $L_d$:
+          </p>
+
+          <div
+            class="my-3 py-3 text-center rounded-lg border border-c3/40 bg-c3/5"
+          >
+            $$s_d = \big\{ (t_{i,d},\; x_{i,d}) \big\}_{i=1}^{L_d}, \qquad
+            t_{1,d} < t_{2,d} < \cdots < t_{L_d,\, d}$$
+          </div>
+
+          <p class="mt-4">
+            where $t_{i,d}$ is the minute at which the $i$-th observation of
+            channel $d$ was made and $x_{i,d}$ is the value recorded at it. The
+            stay as a whole is $s = (s_1, \dots, s_D)$. Three conditions hold:
+          </p>
+
+          <ul class="mt-3 ml-6 space-y-3 list-disc text-[18px]">
+            <li>
+              The lengths differ across channels. Here $D = 3$, with $L_1
+              \approx 2000$, $L_2 = 11$ and $L_3 = 4$.
+            </li>
+            <li>
+              The spacings $t_{i+1,\, d} - t_{i,d}$ are not constant, either
+              within a channel or between channels.
+            </li>
+            <li>
+              The observation times of different channels do not coincide:
+              $t_{i,d} \neq t_{j,d'}$ for $d \neq d'$, so no instant carries a
+              complete vector of $D$ values.
+            </li>
+          </ul>
+
+          <p class="mt-4">
+            One further thing changes once the rectangle is gone. Let's say we
+            want to calculate a lactate value for minute 300. Now the system
+            must determine the most probable lactate level at that specific
+            moment by relying on the four available measurements at minutes 15,
+            380, 1120, and 2650, alongside the continuous activity of the pulse
+            and temperature during the intervening time. Our accuracy in
+            answering this question can vary significantly, and this
+            interpolation represents a fundamentally different challenge than
+            predicting a future event like estimating the pulse in the 40th
+            hour. As a result, the model now faces two distinct objectives. It
+            must
+            <b>deduce what occurred during unmeasured historical gaps</b> while
+            <b>simultaneously forecasting future outcomes</b>.
+          </p>
+
+          <p class="mt-4">
+            This provides a fundamental test to apply to all subsequent
+            analyses. A processing mechanism either accepts the raw data $s$
+            exactly as it is presented, which consists of three lists of varying
+            lengths lacking common timestamps, or it fails to do so. If the
+            system requires a rigid rectangular format beforehand,
+            <span class="hl-c3"
+              >it means an unmeasured value is being artificially generated
+              somewhere within the pipeline</span
+            >. Once this fabricated number is recorded, it becomes completely
+            indistinguishable from the other actual measurements.
+          </p>
+        </section>
+      </div>
+
+      <!-- Navigation -->
+      <nav
+        class="mt-20 pt-8 border-t border-gray-200 dark:border-gray-800 flex justify-between text-sm"
+      >
+        <a
+          href="position_as_proxy.html"
+          class="text-muted hover:text-c3 transition-colors"
+          >&larr; 06 &nbsp;&middot;&nbsp; Position Is Only a Proxy for Time</a
+        >
+        <a
+          href="repairs.html"
+          class="text-muted hover:text-c3 transition-colors"
+          >08 &nbsp;&middot;&nbsp; The Repairs That Do Not Hold &rarr;</a
+        >
+      </nav>
+    </article>
+  </body>
+</html>

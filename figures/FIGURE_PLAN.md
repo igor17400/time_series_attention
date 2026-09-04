@@ -74,7 +74,7 @@ prose (400 scores against eight million) and shows no mechanism.
 
 | name | shows |
 |------|-------|
-| `three_problems` | The patient's chart as three tick strips on a shared 48-hour axis: heart rate dense, temperature occasional, lactate four ticks. Annotates the three distinct failures, uneven gaps, missing readings, and unaligned channels. The figure sections 10 to 13 answer. |
+| `three_problems` | **Drawn.** Three lanes on one 48-hour axis. Heart rate as a dense comb with two dropout gaps and $\approx 2000$ readings, temperature with 11, lactate with 4 at minutes 15, 380, 1120 and 2650. A dashed line at minute 300 crosses all three, and a bracket marks the empty stretch between the lactate readings at 15 and 380, which is where the fabricated 2.4 came from. The figure sections 10 to 13 answer. |
 
 ## 08 The Repairs That Do Not Hold
 
