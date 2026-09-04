@@ -42,7 +42,12 @@ prose (400 scores against eight million) and shows no mechanism.
 
 | name | shows |
 |------|-------|
-| `patching` | A strip of signal cut into overlapping windows of length $P$ at stride $S$, each window flattened and projected into one token. Shapes annotated at every step. |
+| `patching_overlap` | **Drawn.** The `patching` figure rebuilt at $S = 30$, so the two can be read against each other. The windows are staggered rather than tiled because they overlap, the first three carry three different tints, and dashed guides carry each into the matching row of the $95 \times 60$ matrix and on into the token sequence. $N = 95$ throughout. |
+| `stride_rows` | Superseded by `patching_overlap` and no longer used on the page. Source and SVG kept.
+
+**Drawn.** Three consecutive $S = 30$ windows on a time axis (minutes 300 to 420), then the same three as rows 11, 12 and 13 of the $95 \times 60$ matrix. Each row is split into its two halves and labelled by minute range, and the halves that repeat between adjacent rows carry the same fill and are tied by dashed lines. Makes overlap concrete in the matrix, where the rows are aligned even though the windows are not. |
+| `stride_overlap` | **Drawn.** Minutes 240 to 480 of the pulse, with a jump at 355 to 365 marked by a shaded band running the height of the figure. Above, $S = P = 60$: the windows tile and a seam lands at minute 360, splitting the jump. Below, $S = 30$: seven staggered bars, and the one covering minutes 330 to 389 is picked out because it holds the jump whole. The figure the stride paragraph needs, since the split is a thing to see rather than to be told. |
+| `patching` | **Drawn.** Two rows. Above: the 48-hour signal with $L$ braced across it, cut into windows, with $P$ braced under one window and $S$ as a double arrow between two window starts. Below: the $N \times P$ matrix of patches, the learned $P \times d_{\text{model}}$ projection, the $N \times d_{\text{model}}$ token sequence, and attention. Dashed guides carry patch 1 down to row 1, and row 1 is tinted in both matrices, so the reader can trace one window all the way to one token. Every shape in the paragraph appears once in the figure. |
 
 ## 04 Many Channels, One Clock
 

@@ -1,0 +1,280 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Patches &mdash; Attention Over Time</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            fontFamily: {
+              sans: ["Inter", "system-ui", "sans-serif"],
+            },
+            colors: {
+              ink: "#000000",
+              surface: "#F7F8FA",
+              muted: "#5F6B75",
+              c1: "#000000",
+              c2: "#233D4D",
+              c3: "#FE7F2D",
+              c4: "#EAECF0",
+            },
+          },
+        },
+      };
+    </script>
+    <script src="../theme.js"></script>
+    <script>
+      window.MathJax = {
+        tex: {
+          inlineMath: [["$", "$"]],
+          displayMath: [["$$", "$$"]],
+        },
+      };
+    </script>
+    <script
+      id="MathJax-script"
+      async
+      src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"
+    ></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="../styles.css" />
+  </head>
+  <body
+    class="bg-surface text-ink font-sans antialiased dark:bg-[#0B1319] dark:text-gray-100"
+  >
+    <article class="max-w-3xl mx-auto px-6 py-20">
+      <!-- Back link -->
+      <a
+        href="../index.html"
+        class="text-sm text-muted hover:text-c3 transition-colors"
+        >&larr; Back to syllabus</a
+      >
+
+      <!-- Title -->
+      <header class="mt-8 mb-16">
+        <p class="text-sm text-c3 font-medium uppercase tracking-widest mb-3">
+          03 &nbsp;&middot;&nbsp; Attention Over Time
+        </p>
+        <h1 class="text-4xl md:text-5xl font-bold leading-tight mb-4">
+          Patches
+        </h1>
+        <p class="text-lg text-muted leading-relaxed">
+          Cutting the signal into windows.
+        </p>
+      </header>
+
+      <div
+        class="space-y-12 text-gray-700 dark:text-gray-300 leading-relaxed text-[18px]"
+      >
+        <section>
+          <p>
+            If an instant carries no shape, then the repair is to stop making
+            the instant the unit. Take the 2880 minutes of the stay and cut them
+            into consecutive windows of sixty minutes, and let one window be one
+            token. Minute 300 is then no longer a row of its own, it is one of
+            the sixty numbers inside the window running from minute 300 to
+            minute 359. That window rose, or fell, or held flat, or spiked once
+            and came back, and sixty numbers in a fixed order can say any of
+            those things. A window has a shape where a minute has only a value,
+            and that shape is what we are interested in.
+          </p>
+
+          <p class="mt-4">
+            The second problem disappears simultaneously without any direct
+            effort. By consolidating sixty minutes into a single window, the
+            original 2880 rows are compressed into exactly 48 tokens. Working
+            with 48 tokens generates only 2304 pairs to process instead of eight
+            and a quarter million. The fundamental quadratic cost still exists.
+            We have simply changed the frequency of this computation from once a
+            minute to once an hour. Ultimately, the chosen length of the window
+            serves as the main variable that determines the overall
+            computational expense.
+          </p>
+
+          <p class="mt-4">
+            Written down, all of this is three numbers and a linear layer. Call
+            $L$ the length of the stretch we are reading, $P$ the length of one
+            patch, and $S$ the <em>stride</em>, the distance from the start of
+            one patch to the start of the next. Cutting the stretch gives $$N =
+            \lfloor (L - P)/S \rfloor + 1 \quad \text{patches}$$ So with $L =
+            2880$, $P = 60$ and $S = 60$ we get $N = 48$ windows that sit side
+            by side <b>without overlapping</b>. Each patch is $P$ numbers, which
+            makes the whole stretch an $N \times P$ matrix, and one learned
+            matrix of shape $P \times d_{\text{model}}$ turns each row of it
+            into a token. The sequence handed to attention is then $N \times
+            d_{\text{model}}$. One thing has been quietly set aside in that
+            paragraph, it describes a single channel, and the patient has three.
+          </p>
+
+          <ul class="mt-3 ml-6 space-y-3 list-disc text-[18px]">
+            <li>
+              $L$ is the <strong>lookback</strong>, how many minutes of the stay
+              we read at once. Ours to choose, and here $L = 2880$, the whole 48
+              hours.
+            </li>
+            <li>
+              $P$ is the <strong>patch length</strong>, how many minutes go into
+              one window. Ours to choose, and here $P = 60$.
+            </li>
+            <li>
+              $S$ is the <strong>stride</strong>, the distance from the start of
+              one window to the start of the next. Ours to choose. $S = P$ makes
+              the windows tile, $S &lt; P$ makes them overlap.
+            </li>
+            <li>
+              $N$ is the <strong>number of patches</strong>, and so the length
+              of the sequence attention ends up reading. This one is not a
+              choice, it follows from the other three.
+            </li>
+            <li>
+              $d_{\text{model}}$ is the <strong>width of a token</strong> after
+              the projection. Ours to choose, and unrelated to $P$: a window of
+              sixty minutes can become a token of any width we like.
+            </li>
+          </ul>
+
+          <p class="mt-4">
+            Three shapes come out of those five numbers. The patches are an $N
+            \times P$ matrix, one row per window. The projection is a single
+            learned $P \times d_{\text{model}}$ matrix, the same one applied to
+            every row. What attention reads is $N \times d_{\text{model}}$, one
+            token per window.
+          </p>
+
+          <figure class="my-10 flex flex-col items-center">
+            <img
+              src="../figures/build/patching.svg"
+              alt="A signal spanning 48 hours is divided into consecutive windows of 60 minutes. The length of the whole stretch is marked L, the width of one window P, and the distance between the starts of two windows S. Patch one is traced down to the first row of an N by P matrix, which a learned P by d_model matrix turns into an N by d_model sequence of tokens, and that sequence is fed to attention."
+              class="w-full"
+            />
+            <figcaption class="mt-3 text-sm text-muted text-center max-w-2xl">
+              Follow patch 1 down the dashed lines: a window of the signal
+              becomes a row of $P$ numbers, and that row becomes one token. The
+              windows in this figure tile the stretch exactly, because we chose
+              $S = P$. Nothing forces that choice, and a stride shorter than the
+              patch makes the windows overlap.
+            </figcaption>
+          </figure>
+
+          <p class="mt-4">
+            Nothing requires $S$ to equal $P$, and there is a good reason to
+            make it smaller. Suppose the patient's pulse jumps at minute 355 and
+            has settled again by minute 365. With $P = S = 60$ the windows start
+            at minute 0, 60, 120 and so on, so that event is cut in half: five
+            of its minutes fall at the end of the window covering 300 to 359,
+            and the remaining six fall at the start of the next one. Neither
+            token holds the event, and a shape split across two tokens is a
+            shape the model has to reassemble rather than read. Halve the stride
+            to $S = 30$ and the windows start at 0, 30, 60 and so on, so the
+            window running from minute 330 to 389 contains the jump whole.
+          </p>
+
+          <figure class="my-10 flex flex-col items-center">
+            <img
+              src="../figures/build/stride_overlap.svg"
+              alt="The same four hours of pulse under two tilings. With stride equal to the patch length the windows sit end to end and a window boundary falls at minute 360, in the middle of a jump spanning minutes 355 to 365. With a stride of 30 the windows overlap, and one of them runs from minute 330 to 389 and contains the jump entirely."
+              class="w-full"
+            />
+            <figcaption class="mt-3 text-sm text-muted text-center max-w-2xl">
+              This diagram presents the same four-hour period divided through
+              two distinct methods. The shaded vertical band highlights a sudden
+              spike in the signal. In the upper tiled configuration, this spike
+              aligns directly with the two window tiles, which prevents any
+              individual window from capturing the complete event. In contrast,
+              the lower overlapping configuration allows a single window to
+              contain the entire spike from beginning to end. As a result of
+              this overlapping approach, every minute of the recorded period is
+              now included within two separate windows instead of just one.
+            </figcaption>
+          </figure>
+
+          <p class="mt-4">
+            The bill moves with it. At $S = 30$ the same 48 hours give $$N =
+            \lfloor (2880 - 60)/30 \rfloor + 1 = 95 \quad \text{patches}$$ That
+            is 95 tokens instead of 48, which is 9025 pairs instead of 2304, and
+            every minute now appears in two patches rather than one. That is the
+            trade the stride controls:
+            <b
+              >a smaller $S$ buys the guarantee that a short event lands inside
+              some window whole, and pays for it in tokens</b
+            >. Overlapping patches are the usual choice in practice for exactly
+            this reason.
+          </p>
+
+          <figure class="my-10 flex flex-col items-center">
+            <img
+              src="../figures/build/patching_overlap.svg"
+              alt="The same pipeline as before but with a stride of 30. The windows can no longer be drawn side by side, so the first three are staggered, each starting halfway through the one before. Dashed lines carry them into the first three rows of a 95 by 60 matrix, which is projected into 95 tokens and passed to attention."
+              class="w-full"
+            />
+            <figcaption class="mt-3 text-sm text-muted text-center max-w-3xl">
+              The same pipeline at $S = 30$. The windows can no longer sit side
+              by side, so each one starts halfway through the one before, and
+              window 2 repeats the second half of window 1. Follow the three
+              colours down: each window is still exactly one row and one token,
+              there are 95 of them now instead of 48.
+            </figcaption>
+          </figure>
+
+          <p class="mt-4">
+            Now go back to the three ways the patient might have arrived at
+            minute 300, from
+            <a
+              href="one_number.html"
+              class="text-c3 hover:text-c2 transition-colors"
+              >section 02</a
+            >. We imagined the scenarios of a pulse falling from 120, climbing
+            from 60, or remaining flat at 78 yielded the exact same row
+            representation. These dynamics were inherently indistinguishable.
+            However, applying a windowing approach from minutes 240 to 299
+            captures sixty sequential values that explicitly reflect the
+            downward, upward, or stable trend. Because these yield three
+            distinct rows, the model generates three unique tokens, queries, and
+            score sets. The temporal trend, which could not be captured in a
+            brief three-number row, is now intrinsically represented by the
+            larger sixty-number sequence ($P = 60$).
+          </p>
+
+          <p class="mt-4">
+            This brings us back to the point we postponed earlier. We previously
+            defined a patch over a single channel, which consists of sixty
+            consecutive numbers from one specific signal. However, the patient
+            data contains <b>three distinct signals</b>, and our current
+            architecture does not specify how to handle the remaining two. One
+            option is to stack them so a single token simultaneously captures
+            the pulse, temperature, and lactate levels for the same hour.
+            Alternatively, we could process three separate sequences for each
+            signal and evaluate them independently. Both approaches are
+            conceptually sound but result in fundamentally different models. The
+            next section will explore how to choose between these two methods.
+          </p>
+        </section>
+      </div>
+
+      <!-- Navigation -->
+      <nav
+        class="mt-20 pt-8 border-t border-gray-200 dark:border-gray-800 flex justify-between text-sm"
+      >
+        <a
+          href="one_number.html"
+          class="text-muted hover:text-c3 transition-colors"
+          >&larr; 02 &nbsp;&middot;&nbsp; One Number Is Not a Word</a
+        >
+        <a
+          href="channels.html"
+          class="text-muted hover:text-c3 transition-colors"
+          >04 &nbsp;&middot;&nbsp; Many Channels, One Clock &rarr;</a
+        >
+      </nav>
+    </article>
+  </body>
+</html>
