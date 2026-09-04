@@ -68,7 +68,7 @@ prose (400 scores against eight million) and shows no mechanism.
 
 | name | shows |
 |------|-------|
-| `index_vs_time` | The same six observations twice. Above, plotted against index, evenly spaced. Below, plotted against the real timestamp, bunched and gapped. The positional encoding sees only the top row. |
+| `index_vs_time` | **Drawn.** Five windows twice over. Above, evenly spaced by index, every neighbouring pair joined by an arrow reading *one step*, the pair 2 to 3 in orange. Below, the same five placed on a minute axis at 0, 60, 400, 460 and 520, with the 2 to 3 gap braced as 340 minutes in orange and the others marked 60. Dashed guides join each token to itself. Shows the encoding asserting adjacency rather than merely omitting the gap. |
 
 ## 07 The Irregular Series
 

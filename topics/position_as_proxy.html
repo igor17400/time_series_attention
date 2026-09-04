@@ -1,0 +1,198 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Position a Proxy for Time &mdash; Attention Over Time</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            fontFamily: {
+              sans: ["Inter", "system-ui", "sans-serif"],
+            },
+            colors: {
+              ink: "#000000",
+              surface: "#F7F8FA",
+              muted: "#5F6B75",
+              c1: "#000000",
+              c2: "#233D4D",
+              c3: "#FE7F2D",
+              c4: "#EAECF0",
+            },
+          },
+        },
+      };
+    </script>
+    <script src="../theme.js"></script>
+    <script>
+      window.MathJax = {
+        tex: {
+          inlineMath: [["$", "$"]],
+          displayMath: [["$$", "$$"]],
+        },
+      };
+    </script>
+    <script
+      id="MathJax-script"
+      async
+      src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"
+    ></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="../styles.css" />
+  </head>
+  <body
+    class="bg-surface text-ink font-sans antialiased dark:bg-[#0B1319] dark:text-gray-100"
+  >
+    <article class="max-w-3xl mx-auto px-6 py-20">
+      <!-- Back link -->
+      <a
+        href="../index.html"
+        class="text-sm text-muted hover:text-c3 transition-colors"
+        >&larr; Back to syllabus</a
+      >
+
+      <!-- Title -->
+      <header class="mt-8 mb-16">
+        <p class="text-sm text-c3 font-medium uppercase tracking-widest mb-3">
+          06 &nbsp;&middot;&nbsp; Attention Over Time
+        </p>
+        <h1 class="text-4xl md:text-5xl font-bold leading-tight mb-4">
+          Position as Proxy for Time
+        </h1>
+        <p class="text-lg text-muted leading-relaxed">
+          The encoding answers a question about order.
+        </p>
+      </header>
+
+      <div
+        class="space-y-12 text-gray-700 dark:text-gray-300 leading-relaxed text-[18px]"
+      >
+        <section>
+          <p>
+            Every model we have built has been told where each token sits, and
+            none of them has been told when it happened. A positional encoding
+            takes an index, token 1, token 2, token 3, and turns that integer
+            into a vector the model can add to the token. Under the grid from
+            <a
+              href="patching.html"
+              class="text-c3 hover:text-c2 transition-colors"
+              >section 03</a
+            >
+            the third token is the window running from minute 120 to minute 179,
+            so index 3 and hour 3 are the same fact written two ways. That
+            coincidence has held for five sections, which is exactly why nothing
+            has yet forced us to say which of the two the model actually needs.
+          </p>
+
+          <p class="mt-4">
+            Pull the two apart and they are different kinds of number (which
+            might seem quite obvious). An <span class="hl-c3">index</span> is an
+            <b>ordinal</b>. It says <em>this is the third item</em>, and the
+            only things it can express are order and how many items lie between
+            two of them. A <span class="hl-c3">timestamp</span> is a
+            <b>measurement</b>. It says <em>minute 120</em>, in units, on a
+            scale where the distance between two values means something in the
+            world. Everything a positional encoding hands the model is built
+            from the first kind. The shift from position $p$ to position $p+k$
+            is a fixed rotation because $k$ counts items, and a rule like
+            <em>look two tokens back</em> is learnable because two tokens back
+            is always the same move. Not one step of that ever mentions a
+            minute.
+          </p>
+
+          <p class="mt-4">
+            This is fine while the two agree, and false the moment they stop.
+            Suppose the second window began at minute 60 and the third at minute
+            400. Measured in time they are 340 minutes apart, more than five
+            hours. Measured in indices they are one step apart, exactly like
+            every other neighbouring pair in the sequence. The encoding hands
+            the model a vector that says <em>adjacent</em>, and every rule the
+            model has learned about adjacent pairs is then applied to a pair
+            that is nothing of the sort.
+          </p>
+
+          <figure class="my-10 flex flex-col items-center">
+            <img
+              src="../figures/build/index_vs_time.svg"
+              alt="The same five windows drawn twice. Above, spaced evenly by index, with every neighbouring pair joined by an arrow labelled one step. Below, placed at the minutes they actually began, where the gap between windows two and three is 340 minutes while the others are 60."
+              class="w-full"
+            />
+            <figcaption class="mt-3 text-sm text-muted text-center max-w-2xl">
+              The same five windows, above as the encoding describes them and
+              below as they happened. Follow the dashed lines from windows 2 and
+              3: one step apart in the row the model is given, 340 minutes apart
+              in the stay it is meant to be reading.
+            </figcaption>
+          </figure>
+
+          <p class="mt-4">
+            So how exactly can this be fixed? The obvious response is to modify
+            the input we provide to the model. We can begin by examining the
+            most standard encoding method which uses a
+            <b>learned table containing one row for each position</b>. It's easy
+            to see that this approach fundamentally fails to address the problem
+            because the table relies on integer indexing. A third row exists but
+            a fractional row like 4.7 does not. A lookup table operates solely
+            based on position and no amount of training will enable it to
+            understand actual time intervals.
+          </p>
+
+          <p class="mt-4">
+            An alternative fix involves
+            <b>providing the model directly with the time gap</b>. We could
+            append the elapsed time since the previous token to each new token,
+            passing 60 for standard gaps and 340 for the irregular third token,
+            and allow the projection layer to process this information. While
+            this provides some benefit, it falls short of a complete solution.
+            The time gap enters the system as part of the token content and
+            influences the value that the token provides. However, the attention
+            score that determines how much of that value is actually applied
+            still relies on queries and keys generated from index-based
+            encodings. Furthermore, knowing the gap to an immediately preceding
+            token does not reveal the distance between any two arbitrary tokens.
+            For instance, if we want to determine the temporal distance between
+            the 2nd token and the 40th token, the model would need to sum 38
+            separate numbers.
+          </p>
+
+          <p class="mt-4">
+            What both attempts share is that they treat time as something to
+            attach to a token and consequently the actual failure lies in how
+            the mechanism compares two separate tokens. Attention asks one
+            question, how well token $i$ matches token $j$, and right now the
+            answer is a function of $i$ and $j$, two places in a list. <span class="hl-c3"
+              >What we actually want is for it to be a function of $t_i$ and
+              $t_j$, the minutes at which those two windows happened</span
+            >. That is a different
+            thing to ask for, and no positional encoding, learned or computed,
+            was built to provide it.
+          </p>
+        </section>
+      </div>
+
+      <!-- Navigation -->
+      <nav
+        class="mt-20 pt-8 border-t border-gray-200 dark:border-gray-800 flex justify-between text-sm"
+      >
+        <a
+          href="forecasting.html"
+          class="text-muted hover:text-c3 transition-colors"
+          >&larr; 05 &nbsp;&middot;&nbsp; Forecasting Under a Causal Mask</a
+        >
+        <a
+          href="irregular_series.html"
+          class="text-muted hover:text-c3 transition-colors"
+          >07 &nbsp;&middot;&nbsp; The Irregular Series &rarr;</a
+        >
+      </nav>
+    </article>
+  </body>
+</html>
