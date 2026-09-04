@@ -1,0 +1,221 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>From Tokens to Timestamps &mdash; Attention Over Time</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            fontFamily: {
+              sans: ["Inter", "system-ui", "sans-serif"],
+            },
+            colors: {
+              ink: "#000000",
+              surface: "#F7F8FA",
+              muted: "#5F6B75",
+              c1: "#000000",
+              c2: "#233D4D",
+              c3: "#FE7F2D",
+              c4: "#EAECF0",
+            },
+          },
+        },
+      };
+    </script>
+    <script src="../theme.js"></script>
+    <script>
+      window.MathJax = {
+        tex: {
+          inlineMath: [["$", "$"]],
+          displayMath: [["$$", "$$"]],
+        },
+      };
+    </script>
+    <script
+      id="MathJax-script"
+      async
+      src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"
+    ></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="../styles.css" />
+  </head>
+  <body
+    class="bg-surface text-ink font-sans antialiased dark:bg-[#0B1319] dark:text-gray-100"
+  >
+    <article class="max-w-3xl mx-auto px-6 py-20">
+      <!-- Back link -->
+      <a
+        href="../index.html"
+        class="text-sm text-muted hover:text-c3 transition-colors"
+        >&larr; Back to syllabus</a
+      >
+
+      <!-- Title -->
+      <header class="mt-8 mb-16">
+        <p class="text-sm text-c3 font-medium uppercase tracking-widest mb-3">
+          01 &nbsp;&middot;&nbsp; Attention Over Time
+        </p>
+        <h1 class="text-4xl md:text-5xl font-bold leading-tight mb-4">
+          From Tokens to Timestamps
+        </h1>
+        <p class="text-lg text-muted leading-relaxed">
+          What a sequence model assumes about its input, and which of those
+          assumptions a measured signal quietly breaks.
+        </p>
+      </header>
+
+      <div
+        class="space-y-12 text-gray-700 dark:text-gray-300 leading-relaxed text-[18px]"
+      >
+        <section>
+          <p>
+            The attention mechanism was originally designed for natural language
+            processing, where a sentence is treated as a list of tokens. The
+            system evaluates each token in relation to all others, allowing
+            every word to retain a contextual blend of the most relevant
+            surrounding terms. We can visualize applying this identical process
+            to an entirely different scenario. For example, consider a patient's
+            first 48 hours in an intensive care unit where vital signs such as
+            heart rate, temperature, and lactate levels are recorded
+            periodically over two days. This medical data remains a sequence
+            with a clear chronological order. Because we can interpret this
+            temporal data similarly to language, it opens the possibility of
+            adapting the attention structure for entirely new applications.
+          </p>
+
+          <p class="mt-4">
+            To implement this approach, we can record the first 48 hours of a
+            patient's stay in an intensive care unit. By reading all three
+            medical signals once per minute, we format each minute as a discrete
+            row. For instance, at minute 300, the resulting row is $[78, 37.2,
+            2.4]$, representing a pulse in beats per minute, a temperature in
+            degrees, and lactate levels in millimoles per litre. Stacking these
+            recorded minutes produces a matrix containing 2880 rows ($60 \times
+            48 = 2880$) and 3 columns. We can then widen each row to a dimension
+            of $d_{\text{model}}$ using a linear layer and introduce a
+            positional encoding.
+          </p>
+
+          <p class="mt-4">
+            This ensures the input matrix $X$ perfectly matches the dimensions
+            required by the attention mechanism. From this point, the formula
+            executes seamlessly. The attention scores are generated, each row of
+            the softmax distribution sums to one, and the values blend
+            naturally. The underlying mechanism processes the data effortlessly
+            without recognizing that the input originates from a bedside medical
+            monitor instead of a standard paragraph of text. The figure below
+            puts the two side by side: two inputs with nothing in commong, one
+            unchanged block at the end of both.
+          </p>
+
+          <figure class="my-10 flex flex-col items-center">
+            <img
+              src="../figures/build/sentence_vs_signal.svg"
+              alt="A four token sentence above and three channels of vitals sampled every minute below. Each is passed through a linear layer and a positional encoding, producing a matrix X of four rows in one case and 2880 rows in the other, and both are fed into the same unchanged attention block."
+              class="w-full max-w-2xl"
+            />
+            <figcaption class="mt-3 text-sm text-muted text-center max-w-xl">
+              Two inputs with almost nothing in common arrive at the same
+              object, a matrix of rows with $d_{\text{model}}$ columns. The
+              block on the right is not modified at all. Every adaptation we
+              have made so far happens before it, in how the rows were built.
+            </figcaption>
+          </figure>
+
+          <p class="mt-4">
+            This scenario could serve as a practical example. If we directed
+            this model toward a forecasting objective, such as predicting a
+            patient's heart rate over the subsequent six hours, it could be
+            trained to handle such predictions. Through this process, the model
+            could learn genuine clinical patterns. For instance, it could
+            discover that a fever increasing at the twelfth hour typically
+            continues to rise during the thirteenth hour, and it could recognize
+            that a pulse and temperature often elevate simultaneously.
+            Ultimately, transformer forecasting models in current research could
+            rely on a matrix constructed in this exact manner and could achieve
+            highly effective results.
+          </p>
+
+          <p class="mt-4">
+            However it is easy to overlook the numerous assumptions required
+            regarding that 48-hour period before the data matrix could even be
+            formulated. The attention mechanism itself requires none of these
+            prerequisites. The system simply accepts and compares rows of data.
+            It would process any rows provided to it without encountering
+            issues. However, the specific dimensions of the input matrix $X$ do
+            not represent an inherent discovery about the patient. We actively
+            engineered this structure. Establishing this framework required us
+            to resolve three fundamental questions which the hospital ward data
+            did not naturally provide.
+          </p>
+        </section>
+
+        <section>
+          <h2 class="text-2xl font-semibold text-ink dark:text-white mb-4">
+            What we answered on the patient's behalf
+          </h2>
+          <p>
+            Read the recipe back and count the decisions in it. Each one is a
+            question about those 48 hours, and in each case the answer came from
+            us rather than from the chart.
+          </p>
+
+          <ol class="mt-3 ml-6 space-y-4 list-decimal text-[18px]">
+            <li>
+              <b>What is one row?</b> We said one minute. Nothing about the
+              patient marks a minute as the natural unit, and had we said one
+              second or one hour, the same 48 hours would have produced a
+              different matrix. The row is a unit we imposed on the stay, not
+              one we found in it.
+            </li>
+            <li>
+              <b>How far apart are two rows?</b> We said always the same
+              distance, exactly one minute, from the first row to the last. This
+              is the assumption that lets a positional encoding stand in for a
+              clock. Position 300 means minute 300 only while every step is the
+              same length.
+            </li>
+            <li>
+              <b>Is every row complete?</b> We wrote three numbers into every
+              row, which claims that all three signals existed at that instant
+              and that all three were recorded. A row with a hole in it is not
+              something the mechanism can score.
+            </li>
+          </ol>
+
+          <p class="mt-4">
+            None of the three is an unreasonable thing to assume. A bedside
+            monitor really does sample at a fixed rate, and for a signal that
+            comes off a machine the matrix we built is close to honest. So we
+            keep all three for now, and carry on as the grid were real.
+            <span class="hl-c3"
+              >The rest of this tutorial is those three answers being taken
+              away, one at a time</span
+            >.
+          </p>
+        </section>
+      </div>
+
+      <!-- Navigation -->
+      <nav
+        class="mt-20 pt-8 border-t border-gray-200 dark:border-gray-800 flex justify-between text-sm"
+      >
+        <span></span>
+        <a
+          href="one_number.html"
+          class="text-muted hover:text-c3 transition-colors"
+          >02 &nbsp;&middot;&nbsp; One Number Is Not a Word &rarr;</a
+        >
+      </nav>
+    </article>
+  </body>
+</html>
