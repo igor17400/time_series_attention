@@ -1,0 +1,444 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>The Repairs That Do Not Hold &mdash; Attention Over Time</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            fontFamily: {
+              sans: ["Inter", "system-ui", "sans-serif"],
+            },
+            colors: {
+              ink: "#000000",
+              surface: "#F7F8FA",
+              muted: "#5F6B75",
+              c1: "#000000",
+              c2: "#233D4D",
+              c3: "#FE7F2D",
+              c4: "#EAECF0",
+            },
+          },
+        },
+      };
+    </script>
+    <script src="../theme.js"></script>
+    <script>
+      window.MathJax = {
+        tex: {
+          inlineMath: [["$", "$"]],
+          displayMath: [["$$", "$$"]],
+        },
+      };
+    </script>
+    <script
+      id="MathJax-script"
+      async
+      src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"
+    ></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="../styles.css" />
+  </head>
+  <body
+    class="bg-surface text-ink font-sans antialiased dark:bg-[#0B1319] dark:text-gray-100"
+  >
+    <article class="max-w-3xl mx-auto px-6 py-20">
+      <!-- Back link -->
+      <a
+        href="../index.html"
+        class="text-sm text-muted hover:text-c3 transition-colors"
+        >&larr; Back to syllabus</a
+      >
+
+      <!-- Title -->
+      <header class="mt-8 mb-16">
+        <p class="text-sm text-c3 font-medium uppercase tracking-widest mb-3">
+          08 &nbsp;&middot;&nbsp; Attention Over Time
+        </p>
+        <h1 class="text-4xl md:text-5xl font-bold leading-tight mb-4">
+          The Repairs That Do Not Hold
+        </h1>
+        <p class="text-lg text-muted leading-relaxed">
+          Binning, forward filling, imputing, and feeding the gap as a feature.
+        </p>
+      </header>
+
+      <div
+        class="space-y-12 text-gray-700 dark:text-gray-300 leading-relaxed text-[18px]"
+      >
+        <section>
+          <p>
+            Every repair presented in this section all share a common mechanism.
+            They reconstruct a structured data table and then forward it to
+            processing. The primary difference among them is the method used to
+            fill the vacant cells. It is important to evaluate each approach
+            carefully because these strategies represent the standard way
+            irregular data is processed.
+          </p>
+        </section>
+
+        <section>
+          <h2 class="text-2xl font-semibold text-ink dark:text-white mb-4">
+            Discretising into bins
+          </h2>
+          <p>
+            Choose a bin width, say one hour, so that bin $b$ covers the minutes
+            $[\,60(b-1),\ 60b\,)$ for $b = 1, \dots, 48$, and collect the
+            observations of channel $d$ that fall inside it:
+          </p>
+
+          <div class="my-4 py-2 text-center">
+            $$\mathcal{I}_{b,d} = \{\, i : t_{i,d} \in [\,60(b-1),\ 60b\,)
+            \,\}$$
+          </div>
+
+          <p class="mt-4">
+            Where the bin holds something, the cell takes the mean of it:
+          </p>
+
+          <div
+            class="my-3 py-3 text-center rounded-lg border border-c3/40 bg-c3/5"
+          >
+            $$\bar{x}_{b,d} = \frac{1}{|\mathcal{I}_{b,d}|} \sum_{i \in
+            \mathcal{I}_{b,d}} x_{i,d}, \qquad \mathcal{I}_{b,d} \neq
+            \varnothing$$
+          </div>
+
+          <p class="mt-4">
+            How often that rule applies depends entirely on the channel.
+          </p>
+
+          <ul class="mt-3 ml-6 space-y-3 list-disc text-[18px]">
+            <li>
+              <b>Pulse.</b> $|\mathcal{I}_{b,1}| \approx 42$ for almost every
+              bin, so the rule applies 46 times out of 48 and forty-odd readings
+              are replaced by one number.
+            </li>
+            <li>
+              <b>Temperature.</b> $|\mathcal{I}_{b,2}| = 1$ for 11 bins and $0$
+              for the other 37.
+            </li>
+            <li>
+              <b>Lactate.</b> $|\mathcal{I}_{b,3}| = 1$ for 4 bins and $0$ for
+              the other 44.
+            </li>
+          </ul>
+
+          <p class="mt-4">
+            Fill the empty cells with any method somehow, which the next
+            subsections will show, and the output is a $48 \times 3$ matrix with
+            every cell present, as the figure below shows.
+          </p>
+
+          <figure class="my-10 flex flex-col items-center">
+            <img
+              src="../figures/build/binning_damage.svg"
+              alt="Above, the three channels of the chart with 48 one-hour bin boundaries drawn over them. Below, the resulting 48 by 3 matrix, with a cell shaded orange where a reading fell inside that bin and grey where nothing was measured and a value was carried in. Heart rate has 46 of 48, temperature 11, lactate 4."
+              class="w-full"
+            />
+            <figcaption class="mt-3 text-sm text-muted text-center max-w-2xl">
+              The matrix below has no holes in it, and the shading is the only
+              record of where its numbers came from. Every grey cell is a value
+              carried in from an earlier hour. For lactate that is 44 cells out
+              of 48.
+            </figcaption>
+          </figure>
+
+          <p class="mt-4">
+            Look at what the first column cost. The pulse arrived as forty-odd
+            readings in that hour and the bin replaced them with their mean.
+            <a
+              href="one_number.html"
+              class="text-c3 hover:text-c2 transition-colors"
+              >Section 02</a
+            >
+            spent itself arguing that a single number carries no shape, and
+            <a
+              href="patching.html"
+              class="text-c3 hover:text-c2 transition-colors"
+              >section 03</a
+            >
+            repaired that by making the unit a window of sixty numbers instead
+            of one. Averaging inside the bin undoes exactly that repair. An hour
+            in which the pulse climbed steadily from 60 to 96 and an hour in
+            which it sat at 78 throughout both leave behind the entry 78, and
+            the difference between them is gone before attention ever sees the
+            matrix.
+          </p>
+          <figure class="my-10 flex flex-col items-center">
+            <img
+              src="../figures/build/bin_mean.svg"
+              alt="Two panels, each one hour of pulse readings. On the left the pulse climbs steadily from 60 to 96, on the right it sits at 78 throughout. Both hours produce the same matrix cell, 78."
+              class="w-full"
+            />
+            <figcaption class="mt-3 text-sm text-muted text-center max-w-2xl">
+              Two hours that a clinician would read very differently, reduced to
+              the same number. The mean is the only thing that survives the bin,
+              and it is the same 78 in both.
+            </figcaption>
+          </figure>
+
+          <p class="mt-4">
+            The obvious response is that we chose the wrong width, but the
+            problem is that there is no width that works, since one parameter
+            has to serve three channels whose rates differ. Make the bins one
+            minute wide and the pulse survives almost intact, but the matrix is
+            2880 rows deep, the lactate holds 4 real entries against 2876
+            carried ones, and we are back to the eight million pairs that
+            <a
+              href="one_number.html"
+              class="text-c3 hover:text-c2 transition-colors"
+              >section 02</a
+            >
+            objected to. Make them twelve hours wide and the lactate starts
+            making more sense, with three of its four bins holding a real
+            measurement, whereas five hundred pulse readings are crushed into
+            each single number. As we can see, any width setting ends up being a
+            decision about which channel to damage.
+          </p>
+        </section>
+
+        <section>
+          <h2 class="text-2xl font-semibold text-ink dark:text-white mb-4">
+            Forward Fill
+          </h2>
+          <p>
+            The bins that hold nothing still need an entry, and the cheapest
+            answer is to repeat whatever was there last:
+          </p>
+
+          <div
+            class="my-3 py-3 text-center rounded-lg border border-c3/40 bg-c3/5"
+          >
+            $$\bar{x}_{b,d} = \bar{x}_{b-1,d}, \qquad \mathcal{I}_{b,d} =
+            \varnothing$$
+          </div>
+
+          <p class="mt-4">
+            If we stop to think when $\mathcal{I}_{b,d}$ is empty the rule
+            writes down a number that wasn't actually measured in reality, even
+            though it is a copy of the last one seen. For lactate that means 44
+            of the 48 entries assert that the value has not moved since the
+            previous blood draw, which is exactly the claim the next blood draw
+            was ordered to check.
+            <span class="hl-c3"
+              >The model receives 48 lactate values and has no way apriori to
+              tell the 4 "original" measurements apart from the 44 copies</span
+            >. It will also learn from them given that a variable carried
+            forward for hours at a time looks, in the training data, like a
+            variable that rarely changes.
+          </p>
+          <figure class="my-10 flex flex-col items-center">
+            <img
+              src="../figures/build/forward_fill.svg"
+              alt="The lactate channel over 48 hours. Four measured points are shown as filled dots, joined by a staircase that holds each value flat until the next measurement. Minute 300 sits on the first flat and takes the value 2.4 copied from minute 15."
+              class="w-full"
+            />
+            <figcaption class="mt-3 text-sm text-muted text-center max-w-2xl">
+              The four dots are the measurements. Everything between them is the
+              rule repeating itself, and minute 300 sits on the first flat,
+              holding a 2.4 copied from the reading fifteen minutes into the
+              stay.
+            </figcaption>
+          </figure>
+        </section>
+
+        <section>
+          <h2 class="text-2xl font-semibold text-ink dark:text-white mb-4">
+            Interpolation
+          </h2>
+          <p class="mt-4">
+            For a time $t$ with no observation, take the last observation of
+            channel $d$ at or before it and the first one after it:
+          </p>
+
+          <div class="my-4 py-2 text-center">
+            $$i^- = \max \{\, i : t_{i,d} \leq t \,\}, \qquad i^+ = \min \{\, i
+            : t_{i,d} > t \,\}$$
+          </div>
+
+          <p class="mt-4">
+            and place the value on the straight line joining them, at the
+            fraction of the gap that $t$ has reached:
+          </p>
+
+          <div
+            class="my-3 py-3 text-center rounded-lg border border-c3/40 bg-c3/5"
+          >
+            $$\hat{x}_d(t) = x_{i^-,d} + \lambda \,\big( x_{i^+,d} - x_{i^-,d}
+            \big), \qquad \lambda = \frac{t - t_{i^-,d}}{t_{i^+,d} -
+            t_{i^-,d}}$$
+          </div>
+
+          <p class="mt-4">
+            For the lactate at $t = 300$ the bracketing observations are
+            $t_{i^-,d} = 15$ with $x_{i^-,d} = 2.4$ and $t_{i^+,d} = 380$ with
+            $x_{i^+,d} = 3.1$, so $\lambda = 285/365 \approx 0.78$ and
+            $\hat{x}_d(300) \approx 2.95$.
+          </p>
+
+          <p class="mt-4">
+            Compare this with forward fill, it is the same expression with
+            $\lambda$ fixed at $0$ meaning it uses $i^-$ and never looks at
+            $i^+$.
+          </p>
+          <p class="mt-4">
+            Interpolation is a function of $x_{i^+,d}$, and $t_{i^+,d} > t$ by
+            construction, so the value standing at time $t$ is built from a
+            measurement taken after $t$. Forward fill is more
+            <b>honest</b> about direction. Even though interpolation is arguably
+            a better estimate, it <b>leaks</b> information from the future.
+          </p>
+          <p class="mt-4">
+            The leak sits in the matrix, not in the model.
+            <a
+              href="forecasting.html"
+              class="text-c3 hover:text-c2 transition-colors"
+              >Section 05</a
+            >'s causal mask governs which tokens a query is allowed to read, and
+            <b
+              >says nothing about which measurements went into building those
+              tokens</b
+            >. A model can be perfectly causal and still be reading a blood test
+            that has not been taken.
+          </p>
+          <figure class="my-10 flex flex-col items-center">
+            <img
+              src="../figures/build/interpolation_leak.svg"
+              alt="The lactate readings at minute 15 and minute 380 joined by a straight line. The value at minute 300 is read off that line as 2.95. An arrow runs backwards from the measurement at 380 to the imputed point at 300, and everything after minute 300 is shaded as not yet measured."
+              class="w-full"
+            />
+            <figcaption class="mt-3 text-sm text-muted text-center max-w-2xl">
+              The imputed 2.95 is a better estimate than the copied 2.4, and it
+              is built from a measurement taken 80 minutes later. The shaded
+              region is what has not happened yet at minute 300, and the arrow
+              crosses out of it.
+            </figcaption>
+          </figure>
+        </section>
+
+        <section>
+          <h2 class="text-2xl font-semibold text-ink dark:text-white mb-4">
+            The Gap as a Feature
+          </h2>
+          <p>
+            The three repairs so far all in a way try to hide the irregularity.
+            This one takes a different paradigm as it detects the irregularity
+            and hands it to the model. Alongside each cell, record whether
+            anything was actually measured there,
+          </p>
+
+          <div class="my-4 py-2 text-center">
+            $$m_{b,d} = \begin{cases} 1, & \mathcal{I}_{b,d} \neq \varnothing
+            \\[4pt] 0, & \mathcal{I}_{b,d} = \varnothing \end{cases}$$
+          </div>
+
+          <p class="mt-4">
+            and how long it has been since this channel was last measured, where
+            $t_b$ is the time bin $b$ begins:
+          </p>
+
+          <div class="my-4 py-2 text-center">
+            $$\delta_{b,d} = t_b - t_{i^-,d}$$
+          </div>
+
+          <p class="mt-4">
+            The model now receives three numbers per cell rather than one: a
+            value, a flag saying whether that value was observed, and the age of
+            the observation behind it. For the lactate at minute 300 that is
+            $\bar{x} = 2.4$, $m = 0$, $\delta = 285$, which is reather quite
+            different than the bare 2.4.
+          </p>
+          <p class="mt-4">
+            A model can go further and let stale values decay towards the
+            channel's average, which is what
+            <a
+              href="https://arxiv.org/abs/1606.01865"
+              class="text-c3 hover:text-c2 underline decoration-c3/40 underline-offset-2 transition-colors"
+              target="_blank"
+              >GRU-D</a
+            >
+            does (a recurrent network built for clinical records with missing
+            values, which learns for each variable how quickly a reading goes
+            stale):
+          </p>
+
+          <div
+            class="my-3 py-3 text-center rounded-lg border border-c3/40 bg-c3/5"
+          >
+            $$\gamma_{b,d} = \exp\!\big(\!-\max(0,\ w_d\,\delta_{b,d} + a_d)
+            \big), \qquad \tilde{x}_{b,d} = \gamma_{b,d}\,\bar{x}_{b,d} + (1 -
+            \gamma_{b,d})\,\mu_d$$
+          </div>
+
+          <p class="mt-4">Let's break each term of that down.</p>
+
+          <ol class="mt-3 ml-6 space-y-3 list-decimal text-[18px]">
+            <li>
+              $\delta_{b,d}$ is the <b>age</b> of the value in the cell, the
+              minutes since channel $d$ was last actually measured. It is $0$
+              wherever $m_{b,d} = 1$.
+            </li>
+            <li>
+              $w_d\,\delta_{b,d} + a_d$ turns that age into a
+              <b>staleness score</b>. Where $w_d$ sets how fast this variable
+              goes out of date, $a_d$ sets how long it is trusted before that
+              begins. Both are learned and one pair per channel is configured.
+            </li>
+            <li>
+              $\max(0,\, \cdot\,)$ stops the score going negative, so the
+              exponent is never positive and the weight below can never exceed
+              1.
+            </li>
+            <li>
+              $\exp(-\,\cdot\,)$ maps staleness onto $(0, 1]$. A reading taken a
+              moment ago gives $\gamma_{b,d}$ near 1, one taken long ago gives
+              $\gamma_{b,d}$ near 0.
+            </li>
+            <li>
+              $\mu_d$ is the <b>fallback</b>, the mean of channel $d$ across the
+              training set, which is what the model believes about this variable
+              when it has nothing recent to go on.
+            </li>
+            <li>
+              $\tilde{x}_{b,d}$ is the value finally handed on, the two blended
+              in the proportion $\gamma_{b,d}$. The logic being the carried
+              measurement while it is fresh, the population mean once it is not.
+            </li>
+          </ol>
+
+          <p class="mt-4">
+            It marks the invented cells, which answers the complaint that the
+            model could not tell the 4 from the 44, and it lets the model
+            discount them in proportion to how stale they are.
+          </p>
+        </section>
+      </div>
+
+      <!-- Navigation -->
+      <nav
+        class="mt-20 pt-8 border-t border-gray-200 dark:border-gray-800 flex justify-between text-sm"
+      >
+        <a
+          href="irregular_series.html"
+          class="text-muted hover:text-c3 transition-colors"
+          >&larr; 07 &nbsp;&middot;&nbsp; The Irregular Series</a
+        >
+        <a
+          href="time_embedding.html"
+          class="text-muted hover:text-c3 transition-colors"
+          >09 &nbsp;&middot;&nbsp; Embedding Continuous Time &rarr;</a
+        >
+      </nav>
+    </article>
+  </body>
+</html>

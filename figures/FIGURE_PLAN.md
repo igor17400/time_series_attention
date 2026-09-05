@@ -80,7 +80,7 @@ prose (400 scores against eight million) and shows no mechanism.
 
 | name | shows |
 |------|-------|
-| `binning_damage` | The same tick strip discretised into hour-long bins: one bin holds three readings and has to pick, four bins hold none and invent. |
+| `binning_damage` | **Drawn.** Above, the three chart lanes with 48 one-hour bin boundaries ruled over them. Below, the resulting $48 \times 3$ matrix with cells shaded by provenance: orange where a reading fell in the bin, grey where a value was carried in. Counts on the right, 46 / 11 / 4 of 48. Shows that the repaired matrix is full and that most of lactate is invented. |
 | `forward_fill` | A forward-filled temperature trace against the true one, with the flat plateau where nothing was measured, and the model unable to tell a plateau from a real steady reading. |
 
 ## 09 Embedding Continuous Time
