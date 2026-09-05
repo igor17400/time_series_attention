@@ -1,0 +1,209 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Embedding Continuous Time &mdash; Attention Over Time</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            fontFamily: {
+              sans: ["Inter", "system-ui", "sans-serif"],
+            },
+            colors: {
+              ink: "#000000",
+              surface: "#F7F8FA",
+              muted: "#5F6B75",
+              c1: "#000000",
+              c2: "#233D4D",
+              c3: "#FE7F2D",
+              c4: "#EAECF0",
+            },
+          },
+        },
+      };
+    </script>
+    <script src="../theme.js"></script>
+    <script>
+      window.MathJax = {
+        tex: {
+          inlineMath: [["$", "$"]],
+          displayMath: [["$$", "$$"]],
+        },
+      };
+    </script>
+    <script
+      id="MathJax-script"
+      async
+      src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"
+    ></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="../styles.css" />
+  </head>
+  <body
+    class="bg-surface text-ink font-sans antialiased dark:bg-[#0B1319] dark:text-gray-100"
+  >
+    <article class="max-w-3xl mx-auto px-6 py-20">
+      <!-- Back link -->
+      <a
+        href="../index.html"
+        class="text-sm text-muted hover:text-c3 transition-colors"
+        >&larr; Back to syllabus</a
+      >
+
+      <!-- Title -->
+      <header class="mt-8 mb-16">
+        <p class="text-sm text-c3 font-medium uppercase tracking-widest mb-3">
+          09 &nbsp;&middot;&nbsp; Attention Over Time
+        </p>
+        <h1 class="text-4xl md:text-5xl font-bold leading-tight mb-4">
+          Embedding Continuous Time
+        </h1>
+        <p class="text-lg text-muted leading-relaxed">
+          A positional encoding that accepts any real $t$.
+        </p>
+      </header>
+
+      <div
+        class="space-y-12 text-gray-700 dark:text-gray-300 leading-relaxed text-[18px]"
+      >
+        <section>
+          <p>
+            Let's introduce a new type of encoding, the sinusoidal encoding
+            describes a position as a bank of waves. Its coordinates come in
+            pairs, and pair $j$ turns at its own frequency $\omega_j$:
+          </p>
+
+          <div class="my-4 py-2 text-center">
+            $$PE(p,\, 2j) = \sin(\omega_j\, p), \qquad PE(p,\, 2j+1) =
+            \cos(\omega_j\, p)$$
+          </div>
+
+          <p class="mt-4">
+            The frequencies are fixed in advance, spread geometrically so that
+            the first pair turns quickly and the last pair barely turns at all
+            across the whole sequence. Now look at what that formula actually
+            requires in order to be evaluated. Position $p$ enters only through
+            $\sin$ and $\cos$, and a sine does not care whether the number it is
+            handed is a whole one. Nothing here ever asked for an integer. We
+            fed it integers because we had a list, and the moment we stop using
+            a list we can hand it $t = 300$, or $t = 300.5$, or $t = 2650$, and
+            it will retrieve us a value.
+          </p>
+
+          <p class="mt-4">
+            So hand it the timestamp. Write $\phi(t)$ for the same encoding
+            evaluated at a real time rather than an index, so that the window
+            beginning at minute 300 carries $\phi(300)$ and the lactate drawn at
+            minute 2650 carries $\phi(2650)$. Every complaint in
+            <a
+              href="position_as_proxy.html"
+              class="text-c3 hover:text-c2 transition-colors"
+              >section 06</a
+            >
+            closes at once. Two observations 340 minutes apart now differ by 340
+            minutes' worth of turning, whatever their positions in the list, and
+            the encoding can no longer be made to say
+            <em>adjacent</em> about a pair that is not.
+          </p>
+          <p class="mt-4">
+            The shift property survives the change and improves with it, that
+            is, $\phi(t + \Delta)$ is still $\phi(t)$ rotated by $\omega_j
+            \Delta$ in each pair, except that
+            <b>$\Delta$ is now measured in minutes</b>, so
+            <em>four hours earlier</em> is one fixed rotation the model can
+            learn once and apply anywhere in the stay.
+          </p>
+        </section>
+
+        <section>
+          <h2 class="text-2xl font-semibold text-ink dark:text-white mb-4">
+            The Learned Time Embedding
+          </h2>
+          <p>
+            The construction has a name and a short history. A bank of learned
+            sines alongside one linear coordinate was proposed as a general
+            representation of time by
+            <a
+              href="https://arxiv.org/abs/1907.05321"
+              class="text-c3 hover:text-c2 underline decoration-c3/40 underline-offset-2 transition-colors"
+              target="_blank"
+              >Time2Vec</a
+            >. Formally,
+          </p>
+
+          <div
+            class="my-3 py-3 text-center rounded-lg border border-c3/40 bg-c3/5"
+          >
+            $$\phi(t)[i] = \begin{cases} \omega_0\, t + \alpha_0, & i = 0
+            \\[4pt] \sin\!\big(\omega_i\, t + \alpha_i\big), & 1 \leq i < d_r
+            \end{cases}$$
+          </div>
+
+          <p class="mt-4">Term by term:</p>
+
+          <ul class="mt-3 ml-6 space-y-3 list-disc text-[18px]">
+            <li>
+              $t$ is a <b>time</b>, in minutes, and any real one will do. It is
+              not an index and there is no list it has to belong to.
+            </li>
+            <li>
+              $d_r$ is the <b>width</b> of the embedding, so $\phi(t)$ is a
+              vector of $d_r$ numbers, one per coordinate $i$.
+            </li>
+            <li>
+              $\omega_i$ and $\alpha_i$ are <b>learned</b>, a frequency and a
+              phase per coordinate. The model discovers which timescales matter
+              rather than inheriting them from a formula written for sentences.
+            </li>
+            <li>
+              Coordinate $i = 0$ is the <b>linear term</b>, the one that is not
+              a wave. It grows with $t$ and never returns, which is what lets
+              the embedding distinguish early from late rather than only
+              recognising a rhythm.
+            </li>
+          </ul>
+
+          <figure class="my-10 flex flex-col items-center">
+            <img
+              src="../figures/build/time_embedding_terms.svg"
+              alt="Four coordinates of the embedding drawn across 48 hours: a straight line for i equals 0 and three sine waves of decreasing frequency for i equals 1, 2 and 3. A dashed line at t equals 300 crosses all four, and the value taken from each one is carried across into a stacked vector labelled phi of 300."
+              class="w-full"
+            />
+            <figcaption class="mt-3 text-sm text-muted text-center max-w-2xl">
+              Each coordinate is its own function of time, and one time picks
+              one value out of each. The three waves turn at different learned
+              rates, so together they place $t$ within a rhythm, while the
+              straight line at the top keeps track of how far through the stay
+              it is.
+            </figcaption>
+          </figure>
+        </section>
+      </div>
+
+      <!-- Navigation -->
+      <nav
+        class="mt-20 pt-8 border-t border-gray-200 dark:border-gray-800 flex justify-between text-sm"
+      >
+        <a
+          href="repairs.html"
+          class="text-muted hover:text-c3 transition-colors"
+          >&larr; 08 &nbsp;&middot;&nbsp; Repairing Irregularities (Or Not)</a
+        >
+        <a
+          href="attention_as_interpolation.html"
+          class="text-muted hover:text-c3 transition-colors"
+          >10 &nbsp;&middot;&nbsp; Attention as Interpolation &rarr;</a
+        >
+      </nav>
+    </article>
+  </body>
+</html>

@@ -436,37 +436,6 @@
             model could not tell the 4 from the 44, and it lets the model
             discount them in proportion to how stale they are.
           </p>
-
-          <p class="mt-4">
-            And yet nothing about the rectangle has changed. We still chose a
-            bin width, so the pulse is still averaged into one number per hour
-            and the dilemma about that width is still exactly where we left it.
-            The mask and the age do not avoid the damage, they label it: every
-            $m_{b,d} = 0$ is an honest note attached to a cell that should never
-            have needed to exist. It is a better record of the fabrication, not
-            less fabrication.
-          </p>
-
-          <p class="mt-4">
-            The second objection is the one that matters, and
-            <a
-              href="position_as_proxy.html"
-              class="text-c3 hover:text-c2 transition-colors"
-              >section 06</a
-            >
-            already made it. Both $m_{b,d}$ and $\delta_{b,d}$ reach the model
-            as part of a token's content, so they shape what that token
-            contributes while the score deciding how much of it is used is still
-            computed from $Q$ and $K$ built on index-based encodings. And
-            $\delta_{b,d}$ measures the age of one channel's own last reading,
-            not a distance between two tokens, so it still cannot say how far
-            minute 300 sits from minute 1120.
-            <span class="hl-c3"
-              >All four repairs change what the model is told and none of them
-              changes what the model compares</span
-            >. The requirement from section 06 stands untouched: the score
-            between two tokens has to be a function of $t_i$ and $t_j$.
-          </p>
         </section>
       </div>
 

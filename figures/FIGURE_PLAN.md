@@ -88,7 +88,7 @@ prose (400 scores against eight million) and shows no mechanism.
 | name | shows |
 |------|-------|
 | `pe_to_phi` | The sinusoidal encoding evaluated only at integer positions, then the same waves evaluated at arbitrary real $t$, with the observation times of the running example falling between the integers. |
-| `time_embedding_terms` | The linear term and three sine terms of $\phi_h(t)$ drawn separately over 48 hours, and the vector they stack into at one chosen $t$. |
+| `time_embedding_terms` | **Drawn.** Four coordinates across 48 hours: the linear term for $i = 0$ and three sines of decreasing learned frequency. A dashed line at $t = 300$ crosses all four, each crossing marked, and the values carried right into a stacked vector braced as $\phi(300)$. Shows that one time yields one vector, and that the linear coordinate is the only one that does not come back around. |
 
 ## 10 Attention as Interpolation
 
