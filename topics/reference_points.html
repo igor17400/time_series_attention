@@ -1,0 +1,304 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Queries You Choose &mdash; Attention Over Time</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            fontFamily: {
+              sans: ["Inter", "system-ui", "sans-serif"],
+            },
+            colors: {
+              ink: "#000000",
+              surface: "#F7F8FA",
+              muted: "#5F6B75",
+              c1: "#000000",
+              c2: "#233D4D",
+              c3: "#FE7F2D",
+              c4: "#EAECF0",
+            },
+          },
+        },
+      };
+    </script>
+    <script src="../theme.js"></script>
+    <script>
+      window.MathJax = {
+        tex: {
+          inlineMath: [["$", "$"]],
+          displayMath: [["$$", "$$"]],
+        },
+      };
+    </script>
+    <script
+      id="MathJax-script"
+      async
+      src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"
+    ></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="../styles.css" />
+  </head>
+  <body
+    class="bg-surface text-ink font-sans antialiased dark:bg-[#0B1319] dark:text-gray-100"
+  >
+    <article class="max-w-3xl mx-auto px-6 py-20">
+      <a
+        href="../index.html"
+        class="text-sm text-muted hover:text-c3 transition-colors"
+        >&larr; Back to syllabus</a
+      >
+
+      <header class="mt-8 mb-16">
+        <p class="text-sm text-c3 font-medium uppercase tracking-widest mb-3">
+          11 &nbsp;&middot;&nbsp; Attention Over Time
+        </p>
+        <h1 class="text-4xl md:text-5xl font-bold leading-tight mb-4">
+          Queries You Choose
+        </h1>
+        <p class="text-lg text-muted leading-relaxed">
+          A query does not have to come from the data.
+        </p>
+      </header>
+
+      <div
+        class="space-y-12 text-gray-700 dark:text-gray-300 leading-relaxed text-[18px]"
+      >
+        <section>
+          <p>
+            The mechanism from
+            <a
+              href="attention_as_interpolation.html"
+              class="text-c3 hover:text-c2 transition-colors"
+              >section 10</a
+            >
+            answers a question of the form
+            <em>what was channel $d$ doing at time $t$</em>, and it will answer
+            for any $t$ we care. This flexibility introduces a shift in how the
+            model processes information. Traditional architectures always derive
+            their queries directly from the input sequence. Those systems
+            generate one query per token or window, which allows the raw data to
+            dictate the exact volume of questions. The new multi-time attention
+            mechanism reverses this dynamic. The historical record now supplies
+            only the keys and values while we independently define all
+            structural queries.
+          </p>
+
+          <p class="mt-4">
+            This separation requires us to
+            <b>explicitly choose which timestamps to investigate</b>. Neural
+            networks fundamentally cannot process a continuous function of $t$.
+            Typical architectural components such as linear layers, recurrent
+            networks, and attention blocks all demand a specific, predefined
+            quantity of discrete vectors. We currently possess a continuous rule
+            that yields a value for any arbitrary time we specify. We therefore
+            must transform this open-ended rule into a finite data structure
+            before passing it to any downstream computational blocks.
+          </p>
+        </section>
+
+        <section>
+          <h2 class="text-2xl font-semibold text-ink dark:text-white mb-4">
+            Reference Points
+          </h2>
+          <p>
+            To discretize the output, we must establish a fixed set of target
+            evaluation times. We define this discrete sequence as our
+            <b>reference points</b>,
+          </p>
+
+          <div class="my-4 py-2 text-center">
+            $$\mathbf{r} = [\, r_1,\ r_2,\ \dots,\ r_K \,]$$
+          </div>
+
+          <p class="mt-4">
+            and query the mechanism at each designated timestemp. This procedure
+            exctracts $K$ discrete values for a single clinical channel.
+            Processing all $D$ channels simultaneously yields a comprehensive $K
+            \times D$ matrix where the individual entry at row $k$ and column
+            $d$ corresponds to the interpolated result.
+          </p>
+
+          <div
+            class="my-3 py-3 text-center rounded-lg border border-c3/40 bg-c3/5"
+          >
+            $$\hat{x}_d(r_k) = \sum_{i=1}^{L_d} \kappa_d\big(r_k,\, t_{i,d}
+            \big)\, x_{i,d}$$
+          </div>
+
+          <p class="mt-4">
+            which is the equation from section 10 with $t$ set to $r_k$. Nothing
+            about the mechanism has changed. We have simply decided where to
+            point it.
+          </p>
+
+          <figure class="my-10 flex flex-col items-center">
+            <img
+              src="../figures/build/reference_points.svg"
+              alt="Eight reference points spaced evenly across 48 hours along the top, and the four lactate measurements below. Weighted edges fan down from one reference point to all four measurements, with the thickness of each edge showing how much weight that measurement receives."
+              class="w-full"
+            />
+            <figcaption class="mt-3 text-sm text-muted text-center max-w-3xl">
+              Each reference point reaches down to every measurement the channel
+              has, and the thickness of the edges is the weight. Two of the
+              eight are drawn but the other six do the same thing at their own
+              times.
+            </figcaption>
+          </figure>
+        </section>
+
+        <section>
+          <h2 class="text-2xl font-semibold text-ink dark:text-white mb-4">
+            Ragged In, Rectangular Out
+          </h2>
+          <p>
+            This is the step that makes the rest of a model possible. The input
+            was three lists of different lengths with no shared timestamps, and
+            the output is a $K \times D$ array. Its shape depends on $K$ and $D$
+            alone, that is, on how many questions we decided to ask ($K$) and
+            how many channels the patient has ($D$). It does not depend on
+            $L_d$, so
+            <span class="hl-c3"
+              >a patient with 2000 pulse readings and a patient with 30 produce
+              arrays of exactly the same size</span
+            >.
+          </p>
+
+          <figure class="my-10 flex flex-col items-center">
+            <img
+              src="../figures/build/ragged_to_fixed.svg"
+              alt="Two patients with different observation counts, five and seventeen, measured at different times. Both are read at the same eight reference points and both produce an array of the same K by D shape."
+              class="w-full"
+            />
+            <figcaption class="mt-3 text-sm text-muted text-center max-w-3xl">
+              Two records with nothing in common, neither in how many
+              observations they hold nor in when those observations happened,
+              leaving the module in the same shape.
+            </figcaption>
+          </figure>
+
+          <p class="mt-4">
+            Note also what this array is <b>not</b>. It is not a summary of the
+            record at $K$ resolutions, and it is not the record resampled. Each
+            of its $K \times D$ entries was computed from every observation in
+            its channel, weighted by a kernel the model learned. Reference point
+            $r_3$ and reference point $r_7$ read the same four lactate
+            measurements as each other, they differ only in how much attention
+            they pay to each one.
+          </p>
+        </section>
+
+        <section>
+          <h2 class="text-2xl font-semibold text-ink dark:text-white mb-4">
+            A Reference Point Is Not a Bin
+          </h2>
+          <p>
+            While this technique visually resembles the binning strategy from
+            <a
+              href="repairs.html"
+              class="text-c3 hover:text-c2 transition-colors"
+              >section 08</a
+            >, the underlying mechaniscs are completely different. Both methods
+            apply a structured grid to irregular data, but their information
+            flow operates in reverse. The figure illutrates this contrast
+            clearly. A traditional bin is a passive container that only
+            registers data falling explicitly within its boundaries. An empty
+            bin requires the system to artificially invent data using techniques
+            like forward filling. Conversely, the figure shows that a reference
+            point is an active query mechanism. It does not wait to filled but
+            instead actively reaches out across the entire patient record to
+            evaluate surrounding data. Therefore, a reference point always
+            computes a valid interpolated answer on actual nearby measurements
+            rather than relying on fabricated placeholders.
+          </p>
+
+          <figure class="my-10 flex flex-col items-center">
+            <img
+              src="../figures/build/bins_vs_reference.svg"
+              alt="On the left, four bins across the record, one of which contains no measurement and is marked with a question mark. On the right, four reference points on the same record, with one of them shown reaching out to every measurement and receiving weighted answers from all of them."
+              class="w-full"
+            />
+            <figcaption class="mt-3 text-sm text-muted text-center max-w-2xl">
+              The empty bin on the left has to be filled by a rule we invent.
+              The reference point sitting at the same time on the right has
+              nothing to fill, because it was never a container. It asked, and
+              four measurements answered.
+            </figcaption>
+          </figure>
+
+          <p class="mt-4">
+            The consequence is that
+            <span class="hl-c3"
+              >no entry of the array is ever missing, and no entry was ever
+              fabricated</span
+            >. Every one of them is a weighted average of numbers a clinician
+            actually recorded. Where the record is <b>dense</b> the weights
+            concentrate on a handful of nearby readings; where it is
+            <b>sparse</b> they spread across whatever exists. In neither case
+            does anything get written down that nobody measured.
+          </p>
+        </section>
+
+        <section>
+          <h2 class="text-2xl font-semibold text-ink dark:text-white mb-4">
+            Choosing $K$ and Where to Put Them
+          </h2>
+
+          <p class="mb-4">Two structural decisions remain entirely up to us.</p>
+
+          <ol class="list-decimal list-outside ml-6 space-y-3 mb-4">
+            <li>
+              <b>The value of $K$:</b> This parameter establishes the resolution
+              of the final output and determines the computational cost because
+              every reference point must be evaluated against every recorded
+              observation.
+            </li>
+            <li>
+              <b>The placement of the reference points:</b> The standard
+              approach applies an evenly spaced grid across the entire
+              observation window as shown in the previous figures. A practical
+              alternative aligns the reference points with the exact timestamps
+              of actual measurements across any channel so that the model
+              naturally adapts to the clinical record instead of imposing a
+              rigid structure onto it.
+            </li>
+          </ol>
+
+          <p class="mt-4">
+            Both of these selections act as standard hyperparameters that can be
+            tuned on a validation set. They are fundamentally different from the
+            forced compromises required by the methods in section 08. Choosing a
+            suboptimal value for $K$ simply reduces resolution or increases
+            computation time. It will not artificially invent clinical
+            measurements and it will not degrade the integrity of one channel
+            just to accommodate another.
+          </p>
+        </section>
+      </div>
+
+      <nav
+        class="mt-20 pt-8 border-t border-gray-200 dark:border-gray-800 flex justify-between text-sm"
+      >
+        <a
+          href="attention_as_interpolation.html"
+          class="text-muted hover:text-c3 transition-colors"
+          >&larr; 10 &nbsp;&middot;&nbsp; Attention as Interpolation</a
+        >
+        <a
+          href="missingness.html"
+          class="text-muted hover:text-c3 transition-colors"
+          >12 &nbsp;&middot;&nbsp; Missingness Without Imputation &rarr;</a
+        >
+      </nav>
+    </article>
+  </body>
+</html>

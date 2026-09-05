@@ -26,7 +26,7 @@
 }
 
 % ---------------- observations below
-\node[tag, anchor=west] at (1.70, 1.62) {the lactate, measured four times};
+\node[tag, anchor=east] at (1.58, 2.05) {lactate};
 \foreach \m/\v in {15/2.4, 380/3.1, 1120/4.6, 2650/2.8}{
     \fill[c3] ({\X{\m}}, 2.05) circle (2.6pt);
     \node[hot, anchor=north] at ({\X{\m}}, 1.92) {\v};
@@ -36,11 +36,11 @@
 \foreach \m/\w in {15/1.9, 380/1.2, 1120/0.5, 2650/0.25}{
     \draw[c3!70, line width=\w pt] ({\X{900}}, 4.46) -- ({\X{\m}}, 2.19);
 }
-\node[hot, anchor=west] at ({\X{980}}, 3.55) {thicker where the weight is larger};
+\node[hot, anchor=west, align=left] at (1.70, 4.02) {thicker where the\\ weight is larger};
 
 % a second, fainter fan
 \foreach \m/\w in {15/0.3, 380/0.5, 1120/1.5, 2650/1.1}{
-    \draw[c2!30, line width=\w pt] ({\X{1980}}, 4.46) -- ({\X{\m}}, 2.19);
+    \draw[c2!22, line width=\w pt] ({\X{1980}}, 4.46) -- ({\X{\m}}, 2.19);
 }
 
 \draw[axiscolor, line width=0.8pt, -{Stealth[length=5pt]}] (1.70, 1.20) -- (11.15, 1.20);

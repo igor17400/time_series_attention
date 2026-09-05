@@ -108,7 +108,9 @@ prose (400 scores against eight million) and shows no mechanism.
 
 | name | shows |
 |------|-------|
-| `reference_points` | Observation ticks along the bottom in slate, $K$ evenly spaced reference points along the top in black, and weighted edges between them. A ragged input becomes a regular output of length $K$. |
+| `reference_points` | **Drawn.** Eight reference points evenly spaced along the top, the four lactate measurements below, and weighted fans from two of them down to every measurement, edge thickness showing the weight. |
+| `ragged_to_fixed` | **Drawn.** Patient A with 5 observations and patient B with 17, at unrelated times, both read at the same $K$ reference points and both leaving a $K \times D$ array. The variable-to-fixed step. |
+| `bins_vs_reference` | **Drawn.** Left, four bins over the record, one holding nothing and marked with a question mark. Right, four reference points on the same record, one reaching out to every measurement and receiving weighted answers. The container-versus-question contrast that separates this from section 08. |
 
 ## 12 Missingness Without Imputation
 
