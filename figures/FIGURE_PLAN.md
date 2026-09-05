@@ -87,7 +87,12 @@ prose (400 scores against eight million) and shows no mechanism.
 
 | name | shows |
 |------|-------|
-| `pe_to_phi` | The sinusoidal encoding evaluated only at integer positions, then the same waves evaluated at arbitrary real $t$, with the observation times of the running example falling between the integers. |
+| `pe_two_times` | **Drawn.** Eight value lines, one per coordinate, grouped into the four frequency pairs. A dark dot at hour 6 and an orange dot at hour 6.33 on each, joined by a segment whose length is the change, with $|\Delta|$ listed at the right. Segments shrink from 0.326 at the top to 0.000 at the bottom. Carries the worked example in the prose and shows the frequency ladder doing its job. |
+| `pe_at_integers` | Superseded by `pe_two_times` and no longer used on the page. Source and SVG kept.
+
+**Drawn.** One sine and cosine pair drawn continuously over 48 hours, with dark dots at whole positions and orange dots at the four lactate times between them. Shows that the curve was always continuous and the integers were a habit. |
+| `pe_vs_learned` | **Drawn.** Two columns of four coordinates over the same axis. Left, the sinusoidal encoding, four waves at geometrically falling frequencies. Right, the learned embedding, a straight line on top and three waves at learned rates and phases. |
+| `vectors_side_by_side` | **Drawn.** The two encodings as functions: $p = 6$ into the sinusoidal encoding and $t = 300$ into the learned one, each producing eight concrete numbers. Left grouped into sine/cosine pairs, all within $[-1,1]$; right with the linear coordinate picked out as the only unbounded entry. Answers the question of what these things actually return, and states that neither ever sees a measurement. |
 | `time_embedding_terms` | **Drawn.** Four coordinates across 48 hours: the linear term for $i = 0$ and three sines of decreasing learned frequency. A dashed line at $t = 300$ crosses all four, each crossing marked, and the values carried right into a stacked vector braced as $\phi(300)$. Shows that one time yields one vector, and that the linear coordinate is the only one that does not come back around. |
 
 ## 10 Attention as Interpolation
