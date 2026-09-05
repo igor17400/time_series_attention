@@ -1,0 +1,348 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Attention as Interpolation &mdash; Attention Over Time</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            fontFamily: {
+              sans: ["Inter", "system-ui", "sans-serif"],
+            },
+            colors: {
+              ink: "#000000",
+              surface: "#F7F8FA",
+              muted: "#5F6B75",
+              c1: "#000000",
+              c2: "#233D4D",
+              c3: "#FE7F2D",
+              c4: "#EAECF0",
+            },
+          },
+        },
+      };
+    </script>
+    <script src="../theme.js"></script>
+    <script>
+      window.MathJax = {
+        tex: {
+          inlineMath: [["$", "$"]],
+          displayMath: [["$$", "$$"]],
+        },
+      };
+    </script>
+    <script
+      id="MathJax-script"
+      async
+      src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"
+    ></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="../styles.css" />
+  </head>
+  <body
+    class="bg-surface text-ink font-sans antialiased dark:bg-[#0B1319] dark:text-gray-100"
+  >
+    <article class="max-w-3xl mx-auto px-6 py-20">
+      <!-- Back link -->
+      <a
+        href="../index.html"
+        class="text-sm text-muted hover:text-c3 transition-colors"
+        >&larr; Back to syllabus</a
+      >
+
+      <!-- Title -->
+      <header class="mt-8 mb-16">
+        <p class="text-sm text-c3 font-medium uppercase tracking-widest mb-3">
+          10 &nbsp;&middot;&nbsp; Attention Over Time
+        </p>
+        <h1 class="text-4xl md:text-5xl font-bold leading-tight mb-4">
+          Attention as Interpolation
+        </h1>
+        <p class="text-lg text-muted leading-relaxed">
+          What happens when the score is built from time alone.
+        </p>
+      </header>
+
+      <div
+        class="space-y-12 text-gray-700 dark:text-gray-300 leading-relaxed text-[18px]"
+      >
+        <section>
+          <p>
+            In the previous section we introduced how we can compute the
+            continuous time embedding $\boldsymbol{\phi}(t)$ but we not yet
+            discussed where should it be integrated. Following standard
+            positional encoding procedures means adding it directly to the token
+            and letting the standard projections handle the rest. This however
+            bring us back to the complaint from
+            <a
+              href="position_as_proxy.html"
+              class="text-c3 hover:text-c2 transition-colors"
+              >section 06</a
+            >. That is, embedding time directly into the tokens alters its
+            underlying content value, but the attention scores are still
+            computed using $Q$ and $K$ representations based entirely on the
+            clinical measurements. The temporal data therefore is technically
+            present within the model but exercises no influence over the
+            attention distribution.
+          </p>
+
+          <p class="mt-4">
+            The solution then is to avoid adding the temporal encoding to the
+            existing token entirely. Instead, we can construct the query vector
+            specifically from the target timestamp and build the key vector from
+            the timestamp of the recorded measurement. This structural change
+            leaves the <span class="hl-c3">clinical measurement itself</span>,
+            the single number $x_{i,d}$, to serve exclusively as the
+            <b>value</b>. Under this new configuration, the attention score
+            calculation relies only on two primary components, and both of those
+            are strictly temporal.
+          </p>
+
+          <figure class="my-10 flex flex-col items-center">
+            <img
+              src="../figures/build/time_only_scores.svg"
+              alt="Two panels with the same four-row skeleton: two source boxes on top, a score below them, an output at the bottom. On the left, ordinary attention, where the time embedding has been added into the token: token i plus phi of t i supplies the query, and the single box holding token j plus phi of t j supplies both the key and the value. On the right, multi-time attention: the query is phi of t, a time we choose, and the observation is drawn as two boxes, the time embedding phi of t i d giving the key and the single measurement x i d giving the value. A dashed orange arrow from the measurement to the score is crossed out."
+              class="w-full"
+            />
+            <figcaption class="mt-3 text-sm text-muted text-center max-w-2xl">
+              Both panels have the same skeleton, so only the differences read.
+              On the <b>left</b>, the time embedding has been added into the
+              token, and the key and the value are drawn from that one fused
+              box, so what a token says still helps decide how much of it gets
+              read. On the <b>right</b> the observation is split: the timestamp
+              supplies the key, the measurement supplies the value and nothing
+              else. The crossed arrow is the route the measurement does not
+              have.
+            </figcaption>
+          </figure>
+        </section>
+
+        <section>
+          <h2 class="text-2xl font-semibold text-ink dark:text-white mb-4">
+            The Score and the Weights
+          </h2>
+          <p>
+            Consider a specific channel $d$ and a target timestamp $t$, each
+            recorded observation within that channel generates a key derived
+            directly from its own timestamp. The attention score evaluating the
+            relationship between the queried time and a single historical
+            observation is computed as the scaled dot product of their
+            respective embeddings.
+          </p>
+
+          <p class="mt-4">
+            Two widths are involved. The first is $d_r$, the width of the time
+            embedding from
+            <a
+              href="time_embedding.html"
+              class="text-c3 hover:text-c2 transition-colors"
+              >section 09</a
+            >, so $\boldsymbol{\phi}(t)$ has $d_r$ entries. The second is $d_k$,
+            the width of the space the query and the key are compared in. The
+            two learned projections $W_q$ and $W_k$ carry the embedding from one
+            to the other, so both have shape $d_r \times d_k$:
+          </p>
+
+          <div class="my-4 py-2 text-center">
+            $$\mathbf{q}(t) = \boldsymbol{\phi}(t)\, W_q, \qquad
+            \mathbf{k}(t_{i,d}) = \boldsymbol{\phi}(t_{i,d})\, W_k$$
+          </div>
+
+          <p class="mt-4">
+            Both are single vectors of $d_k$ numbers, one asking and one
+            answering, and the score is their scaled dot product:
+          </p>
+
+          <div class="my-4 py-2 text-center">
+            $$e_d\big(t,\, t_{i,d}\big) = \frac{\mathbf{q}(t)\,
+            \mathbf{k}(t_{i,d})^{\top}}{\sqrt{d_k}} =
+            \frac{\boldsymbol{\phi}(t)\, W_q\, W_k^{\top}\,
+            \boldsymbol{\phi}(t_{i,d})^{\top}}{\sqrt{d_k}}$$
+          </div>
+
+          <p class="mt-4">
+            The division by $\sqrt{d_k}$ is the usual one, keeping the scores
+            from growing with the width of the space they are computed in. The
+            figure below illusrate this process for matrix multiplication.
+          </p>
+
+          <figure
+            class="p-2 my-10 flex flex-col items-center border-gray-800 border"
+          >
+            <img
+              src="../figures/build/score_shapes.svg"
+              alt="The score written out as matrix shapes, drawn at d r equals eight and d k equals four. Step one, on the top row: the time embedding phi of t, a row of eight cells, times the eight by four matrix W q, giving the query q of t, a row of four cells; beside it the same for the observation time, phi of t i d times W k giving the key k of t i d. One column of W q is shaded and so is the single entry of q of t it produces. Step two, below: the four-cell query row times the four-cell key column, giving a single cell, divided by the square root of d k to give the score."
+              class="w-full"
+            />
+          </figure>
+
+          <p class="mt-4">
+            Passing them through a softmax over the observations of channel $d$
+            gives weights that are positive and sum to one:
+          </p>
+
+          <div class="my-4 py-2 text-center">
+            $$\kappa_d\big(t,\, t_{i,d}\big) = \frac{\exp e_d(t,\, t_{i,d})}
+            {\sum_{i'=1}^{L_d} \exp e_d(t,\, t_{i',d})}$$
+          </div>
+
+          <p class="mt-4">
+            and the answer at time $t$ is those weights applied to the
+            measurements:
+          </p>
+
+          <div
+            class="my-3 py-3 text-center rounded-lg border border-c3/40 bg-c3/5"
+          >
+            $$\hat{x}_d(t) = \sum_{i=1}^{L_d} \kappa_d\big(t,\, t_{i,d}\big)\,
+            x_{i,d}$$
+          </div>
+
+          <p class="mt-4">
+            Note where the sum runs. It runs over $L_d$, the observations
+            channel $d$ actually has, so the lactate sum has four terms in it
+            and the pulse sum has around two thousand. Nothing is padded and
+            nothing is filled in.
+          </p>
+
+          <p class="mt-4">
+            The figure below illustrates the process. At $t = 300$ we have no
+            actual measurement of lactate, and yet multi-time attention can
+            still estimate one, returning $\hat{x}_d(300) = 2.84$.
+          </p>
+
+          <figure class="my-10 flex flex-col items-center">
+            <img
+              src="../figures/build/attention_interpolation.svg"
+              alt="The four lactate measurements on a 48 hour axis with their values, and above them four bars giving the attention weight each one receives when the model is asked about minute 300. The weights are 0.55, 0.33, 0.09 and 0.03, and the resulting estimate at minute 300 is 2.84."
+              class="w-full"
+            />
+            <figcaption class="mt-3 text-sm text-muted text-center max-w-2xl">
+              Asking about minute 300 puts most of the weight on the two
+              measurements either side of it and almost none on the two a day
+              later. The answer is a blend of things that were actually
+              measured. $$0.55(2.4) + 0.33(3.1) + 0.09(4.6) + 0.03(2.8) = 2.84$$
+            </figcaption>
+          </figure>
+        </section>
+
+        <section>
+          <h2 class="text-2xl font-semibold text-ink dark:text-white mb-4">
+            This Is Interpolation
+          </h2>
+          <p>
+            Look at what those three equations amount to. The calculated weights
+            are strictly non-negative, they sum exactly to one, and they depend
+            exclusively on the relationship between two specific timestamps.
+            <span class="hl-c3"
+              >The final output functions as a weighted average of the recorded
+              measurement</span
+            >. The model determines these weights based on its own learned
+            interpretation of temporal proximity. This specific structure
+            represents a classic form of interpolation known as
+            <a
+              href="https://en.wikipedia.org/wiki/Kernel_regression"
+              class="text-c3 hover:text-c2 underline decoration-c3/40 underline-offset-2 transition-colors"
+              target="_blank"
+              >kernel regression</a
+            >, and $\kappa_d$ serves directly as the kernel function.
+          </p>
+
+          <p class="mt-4">
+            What is new here is where the kernel comes from. Classical kernel
+            regression fixes its shape in advance, most often a bell centred on
+            the query time with one width to tune, and interpolation methods
+            built for irregular clinical data have generally done the same. Here
+            the shape is whatever $W_q$, $W_k$ and the frequencies of
+            $\boldsymbol{\phi}$ turn out to be after training.
+            <span class="hl-c3"
+              >The resulting attention does not need to be symmetric or decay
+              consistenly as temporal distance increases. It can put weight on a
+              measurement taken eighteen hours later if that is what predicts
+              well</span
+            >.
+          </p>
+
+          <figure class="my-10 flex flex-col items-center">
+            <img
+              src="../figures/build/learned_kernel.svg"
+              alt="Two curves showing the weight given to a measurement at time t prime when asking about minute 300. A fixed kernel is a single symmetric bell centred near the query. A learned kernel is asymmetric, peaks slightly before the query, and has two further lobes much later in the stay."
+              class="w-full"
+            />
+            <figcaption class="mt-3 text-sm text-muted text-center max-w-2xl">
+              Both curves say how much a measurement at $t'$ counts when we ask
+              about minute 300. The fixed kernel can only be a bell with a
+              width. The learned one is under no such obligation, and the extra
+              lobes are the model saying that something eighteen hours away is
+              also worth reading.
+            </figcaption>
+          </figure>
+
+          <p class="mt-4">
+            This specific structural design introduces a significant functional
+            trade-off. Because the attention score calculation entirely excludes
+            the actual measurement values, the mechanism can no longer operate
+            like a standard language model. It loses the ability to prioritize a
+            specific measurement based on the clinical severity or magnitude of
+            the recorded value. For example, a normal lactate reading and a
+            critically high lactate reading
+            <b>would receive the exact same attention weight</b> if they occured
+            at the identical timestemp. This architectural narrowing is an
+            <b>intentional design choice</b>.
+            <span class="hl-c3"
+              >The system excels at determining exactly <b>when</b> an event
+              occured, but it fundamentally abandons the ability to evaluate
+              <b>what</b> the actual event was during the scoring phase</span
+            >.
+          </p>
+
+          <p class="mt-4">
+            Finally, the three conditions established in
+            <a
+              href="irregular_series.html"
+              class="text-c3 hover:text-c2 transition-colors"
+              >section 07</a
+            >
+            are each satisfied without an intermediate representation.
+            <em>Unequal spacings</em> are admissible because the score depends
+            on $\boldsymbol{\phi}(t)$ and $\boldsymbol{\phi}(t_{i,d})$ rather
+            than on positions in a list, so the interval between two
+            observations enters the computation directly.
+            <em>Differing observation counts</em>
+            are admissible because the summation ranges over $L_d$, which is a
+            property of the channel and need not agree across channels.
+            <em>The absence of shared timestamps</em> is admissible because each
+            channel is evaluated on its own set of observation times, and no
+            step of the calculation requires two channels to have been measured
+            together.
+          </p>
+        </section>
+      </div>
+
+      <!-- Navigation -->
+      <nav
+        class="mt-20 pt-8 border-t border-gray-200 dark:border-gray-800 flex justify-between text-sm"
+      >
+        <a
+          href="time_embedding.html"
+          class="text-muted hover:text-c3 transition-colors"
+          >&larr; 09 &nbsp;&middot;&nbsp; Embedding Continuous Time</a
+        >
+        <a
+          href="reference_points.html"
+          class="text-muted hover:text-c3 transition-colors"
+          >11 &nbsp;&middot;&nbsp; Queries You Choose &rarr;</a
+        >
+      </nav>
+    </article>
+  </body>
+</html>

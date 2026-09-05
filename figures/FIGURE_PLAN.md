@@ -99,8 +99,10 @@ prose (400 scores against eight million) and shows no mechanism.
 
 | name | shows |
 |------|-------|
-| `time_only_scores` | The standard attention score, content against content, beside the multi-time score, time embedding against time embedding. The value track is drawn in orange in both, and only in the second is it absent from the score. |
-| `learned_kernel` | $\kappa(t, t')$ as a curve over $t'$ for one fixed query time $t$, next to a fixed RBF bump of the same width. The learned kernel is allowed to be asymmetric and multi-modal. |
+| `time_only_scores` | **Drawn.** Two panels on one skeleton: two source boxes, a score, an output. Left, the arrangement this section rejects, with the time embedding added into the token, so one fused box supplies both $K$ and $V$. Right, the observation split in two, $K$ from $\phi(t_{i,d})$ and $V$ from the scalar $x_{i,d}$, with the measurement's route to the score drawn as a dashed arrow and crossed out. Box sublabels state $d_r$ numbers against one number, so the scalar is visible. The query on the right is a time we choose rather than a token in the sequence, which sets up section 11. |
+| `score_shapes` | **Drawn.** The score as matrix shapes at $d_r = 8$, $d_k = 4$. Step 1: $\boldsymbol{\phi}(t)$ as a $1 \times 8$ row times the $8 \times 4$ $W_q$ giving $\mathbf{q}(t)$, and the same for $\boldsymbol{\phi}(t_{i,d})$ and $W_k$; one column of $W_q$ is shaded together with the entry of $\mathbf{q}(t)$ it produces. Step 2: the $1 \times d_k$ row times the $d_k \times 1$ column giving a single cell, then $/\sqrt{d_k}$. Query cells outlined black, key cells slate, learned matrices grey. Answers the shape question the two display equations leave open. |
+| `attention_interpolation` | **Drawn.** The four lactate measurements on the 48-hour axis with their values, and above them the weights $\kappa_d(300, t_{i,d})$ as bars (0.55, 0.33, 0.09, 0.03) with leaders down to the observations they belong to. The answer $\hat{x}_d(300) = 2.84$ marked hollow on the query line. The whole computation in one picture. |
+| `learned_kernel` | **Drawn.** Two curves of weight against $t'$ for a query at minute 300: a fixed symmetric bell in dashed slate, and a learned kernel in orange that is asymmetric, peaks slightly early, and carries two further lobes later in the stay. Shows what learning the kernel buys over choosing one. |
 
 ## 11 Queries You Choose
 
