@@ -67,9 +67,7 @@
         <h1 class="text-4xl md:text-5xl font-bold leading-tight mb-4">
           TOPIC_TITLE
         </h1>
-        <p class="text-lg text-muted leading-relaxed">
-          TOPIC_SUBTITLE
-        </p>
+        <p class="text-lg text-muted leading-relaxed">TOPIC_SUBTITLE</p>
       </header>
 
       <div
@@ -85,9 +83,10 @@
             Section Title
           </h2>
           <p>
-            Paragraph text. <strong>Bold</strong> for emphasis, <em>italic</em>
-            for a term being introduced. Inline maths looks like $q^\top k$.
-            Strongest highlight is <span class="hl-c3">c3 orange</span>, then
+            Paragraph text. <strong>Bold</strong> for emphasis,
+            <em>italic</em> for a term being introduced. Inline maths looks like
+            $q^\top k$. Strongest highlight is
+            <span class="hl-c3">c3 orange</span>, then
             <span class="hl-c2">c2 slate</span>, then
             <span class="hl-c1">c1 black</span>, then
             <span class="hl-c4">c4 soft</span>.
@@ -140,7 +139,9 @@
           <h2 class="text-2xl font-semibold text-ink dark:text-white mb-4">
             Section with Code
           </h2>
-          <div class="my-6 rounded-xl overflow-hidden border border-gray-200 dark:border-gray-800">
+          <div
+            class="my-6 rounded-xl overflow-hidden border border-gray-200 dark:border-gray-800"
+          >
             <pre><code class="language-python">import torch
 
 scores = q @ k.transpose(-2, -1) / d_k**0.5
@@ -170,8 +171,11 @@ scores = q @ k.transpose(-2, -1) / d_k**0.5
           >
             <li id="ref-shukla2021">
               Shukla, S. N. and Marlin, B. M. (2021).
-              <em>Multi-Time Attention Networks for Irregularly Sampled Time
-              Series.</em> ICLR.
+              <em
+                >Multi-Time Attention Networks for Irregularly Sampled Time
+                Series.</em
+              >
+              ICLR.
               <a
                 href="https://arxiv.org/abs/2101.10318"
                 class="text-c3 hover:text-c2 transition-colors"
