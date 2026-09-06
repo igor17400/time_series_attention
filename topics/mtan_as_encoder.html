@@ -1,0 +1,1838 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Many Streams, One Clock &mdash; Attention Over Time</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            fontFamily: {
+              sans: ["Inter", "system-ui", "sans-serif"],
+            },
+            colors: {
+              ink: "#000000",
+              surface: "#F7F8FA",
+              muted: "#5F6B75",
+              c1: "#000000",
+              c2: "#233D4D",
+              c3: "#FE7F2D",
+              c4: "#EAECF0",
+            },
+          },
+        },
+      };
+    </script>
+    <script src="../theme.js"></script>
+    <script>
+      window.MathJax = {
+        tex: {
+          inlineMath: [["$", "$"]],
+          displayMath: [["$$", "$$"]],
+        },
+      };
+    </script>
+    <script
+      id="MathJax-script"
+      async
+      src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"
+    ></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="../styles.css" />
+  </head>
+  <body
+    class="bg-surface text-ink font-sans antialiased dark:bg-[#0B1319] dark:text-gray-100"
+  >
+    <article class="max-w-3xl mx-auto px-6 py-20">
+      <a
+        href="../index.html"
+        class="text-sm text-muted hover:text-c3 transition-colors"
+        >&larr; Back to syllabus</a
+      >
+
+      <header class="mt-8 mb-16">
+        <p class="text-sm text-c3 font-medium uppercase tracking-widest mb-3">
+          14 &nbsp;&middot;&nbsp; Attention Over Time
+        </p>
+        <h1 class="text-4xl md:text-5xl font-bold leading-tight mb-4">
+          Many Streams, One Clock
+        </h1>
+        <p class="text-lg text-muted leading-relaxed">
+          Using the module as an encoder underneath other models.
+        </p>
+      </header>
+
+      <div
+        class="space-y-12 text-gray-700 dark:text-gray-300 leading-relaxed text-[18px]"
+      >
+        <section>
+          <p>
+            The previous chapter built mTAN as half of a variational
+            autoencoder, because that is how the paper presents it. But the
+            encoder does not depend on anything wrapped around it. Take away the
+            latent variables, the decoder and the ELBO, and what is left is a
+            function that accepts a ragged, partially observed record together
+            with a list of times we choose, and returns a rectangle.
+          </p>
+
+          <p class="mt-4">
+            That is worth having on its own, because one of the hard parts of
+            irregular sampling was getting the measurements into a common shape
+            without distorting the channels. The common architectures assume a
+            regular sequence: a transformer wants tokens, a recurrent network
+            wants steps, a convolution wants a grid. The usual way to give them
+            one is to bin / impute, and
+            <a
+              href="repairs.html"
+              class="text-c3 hover:text-c2 transition-colors"
+              >section 08</a
+            >
+            explained why that quietly fabricates measurements. mTAN satisfies
+            the same requirement without fabricating anything, because a
+            reference point is a question rather than a container.
+            <span class="hl-c3"
+              >So it makes sense to stop treating mTAN as a model and start
+              treating it as a front end, this way it does the one job the
+              downstream architecture cannot do for itself</span
+            >.
+          </p>
+
+          <p class="mt-4">
+            Contrast the two other ways of reaching a fixed shape.
+            <b>Binning</b>
+            reaches it by discarding resolution and then filling the holes.
+            <b>Pooling</b> over a variable-length sequence reaches it by
+            throwing the time axis away. The reference grid keeps the time axis,
+            keeps whatever resolution the data supports, and invents nothing.
+            The array is $K \times J$ whether the record holds 30 observations
+            or 3000, whether they arrived every minute or four times in two
+            days, whether every channel is present or only one, and downstream
+            code needs to know none of that.
+          </p>
+
+          <p class="mt-4">
+            This chapter takes that and pushes it further. The record does not
+            have to be $D$ scalar channels on one clock. It can be several
+            streams, in different formats, arriving at different rates, each
+            needing its own encoder before mTAN ever sees them.
+          </p>
+        </section>
+
+        <section>
+          <h2 class="text-2xl font-semibold text-ink dark:text-white mb-4">
+            The general setting
+          </h2>
+          <p>
+            The previous chapter assumed the record was $D$ scalar channels
+            sharing one clock. That assumption is not structurally necessary,
+            and dropping it is where the module stops being a model of vital
+            signs and starts being a general way to <b>encode time</b>.
+          </p>
+
+          <p class="mt-4">
+            Take the general situation. Information reaches the model through
+            $B$ streams. Each stream arrives at its own times and rate, and what
+            arrives is not necessarily a number. For instance, it might be a
+            window of a waveform, an image, a span of text. So each stream comes
+            with its own encoder $f_b$, which turns one arrival into a vector:
+          </p>
+
+          <div class="my-4 py-2 text-center">
+            $$\mathbf{v}^{(b)}_i = f_b\big(u^{(b)}_i\big) \;\in\; \mathbb{R}^{1
+            \times D_b}, \qquad i = 1, \dots, L_b, \qquad b = 1, \dots, B
+            \tag{E15}$$
+          </div>
+
+          <p>
+            Now look at what that produced. A list of times, and at each of them
+            a vector of $D_b$ numbers. That is exactly the object
+            <a
+              href="mtan_network.html"
+              class="text-c3 hover:text-c2 transition-colors"
+              >chapter 13</a
+            >
+            started from, with $D_b$ channels that happen to share one
+            observation-time set and one mask column.
+          </p>
+
+          <div class="panel-c4 rounded-lg p-5 mt-6 text-[16px]">
+            <p class="font-medium text-ink dark:text-white mb-2">
+              The one move that makes this work
+            </p>
+            <p>
+              <b
+                >A stream that emits a $D_b$-vector at time $t$ is $D_b$
+                channels observed at $t$.</b
+              >
+              Nothing in equations (E1) to (E7) ever asked what a channel meant.
+              $D$ was only ever a count of value columns, and $x_{i,d}$ was only
+              ever a number sitting in one of them. Feed the module the
+              coordinates of an encoder's output instead of readings off a
+              monitor and every line of the derivation still holds.
+            </p>
+          </div>
+          <h3 class="text-xl font-semibold text-ink dark:text-white mt-8 mb-3">
+            Two kinds of stream
+          </h3>
+
+          <p>Streams sort into two kinds:</p>
+
+          <ul class="mt-3 ml-6 space-y-3 list-disc text-[18px]">
+            <li>
+              <b>Scalar streams.</b> Vital signs, laboratory values, anything
+              that arrives as a number. Here $f_b$ is the identity, because a
+              reading is already a number, and $D_b$ counts how many distinct
+              quantities are being measured. Each coordinate means something on
+              its own: $x_{i,d}$ is a heart rate or a lactate for example. The
+              important structural fact is that <b>the mask has holes in it</b>.
+              At a given timestamp the heart rate can be present while the
+              lactate is not, so each of the $D_b$ channels runs its own softmax
+              over its own subset of the times, and no two of those subsets need
+              agree.
+            </li>
+            <li>
+              <b>Pre-embedded streams.</b> A clinical note, a radiograph, a
+              diagnosis code, a window of a waveform. Here $f_b$ is a real
+              encoder: a language model, a vision backbone, an embedding table.
+              It emits one dense vector each time something arrives, and $D_b$
+              is simply the width of whatever that encoder outputs. Individual
+              coordinates mean nothing on their own; coordinate 412 of a note
+              embedding is not a measurement of anything. And the mask is
+              different in kind, saying only
+              <b>whether the thing was recorded at all</b>, so it is constant
+              across the whole width. You never have half a note. All $D_b$
+              coordinates share one index set, so all $D_b$ softmaxes are
+              identical, and the attention weights computed for coordinate 1 are
+              reused verbatim for coordinate 768.
+            </li>
+          </ul>
+
+          <div class="my-6 overflow-x-auto">
+            <table class="w-full text-[15px] border-collapse">
+              <thead>
+                <tr
+                  class="text-left text-muted border-b border-gray-500 dark:border-gray-800"
+                >
+                  <th
+                    class="py-2 pr-4 font-medium border-r border-gray-500 dark:border-gray-800"
+                  ></th>
+                  <th
+                    class="py-2 px-4 font-medium border-r border-gray-500 dark:border-gray-800"
+                  >
+                    scalar stream
+                  </th>
+                  <th class="py-2 pl-4 font-medium">pre-embedded stream</th>
+                </tr>
+              </thead>
+              <tbody class="text-gray-700 dark:text-gray-300 align-top">
+                <tr class="border-b border-gray-200 dark:border-gray-800/60">
+                  <td
+                    class="py-2 pr-4 border-r border-gray-200 dark:border-gray-800/60"
+                  >
+                    what arrives
+                  </td>
+                  <td
+                    class="py-2 px-4 border-r border-gray-200 dark:border-gray-800/60"
+                  >
+                    a number per (time, channel)
+                  </td>
+                  <td class="py-2 pl-4">a vector each time one arrives</td>
+                </tr>
+                <tr class="border-b border-gray-200 dark:border-gray-800/60">
+                  <td
+                    class="py-2 pr-4 border-r border-gray-200 dark:border-gray-800/60"
+                  >
+                    $f_b$ is
+                  </td>
+                  <td
+                    class="py-2 px-4 border-r border-gray-200 dark:border-gray-800/60"
+                  >
+                    the identity
+                  </td>
+                  <td class="py-2 pl-4">
+                    a language model, a vision backbone, an embedding table
+                  </td>
+                </tr>
+                <tr class="border-b border-gray-200 dark:border-gray-800/60">
+                  <td
+                    class="py-2 pr-4 border-r border-gray-200 dark:border-gray-800/60"
+                  >
+                    $D_b$ counts
+                  </td>
+                  <td
+                    class="py-2 px-4 border-r border-gray-200 dark:border-gray-800/60"
+                  >
+                    quantities being measured
+                  </td>
+                  <td class="py-2 pl-4">the encoder's output width</td>
+                </tr>
+                <tr class="border-b border-gray-200 dark:border-gray-800/60">
+                  <td
+                    class="py-2 pr-4 border-r border-gray-200 dark:border-gray-800/60"
+                  >
+                    one coordinate alone
+                  </td>
+                  <td
+                    class="py-2 px-4 border-r border-gray-200 dark:border-gray-800/60"
+                  >
+                    means something
+                  </td>
+                  <td class="py-2 pl-4">means nothing</td>
+                </tr>
+                <tr class="border-b border-gray-200 dark:border-gray-800/60">
+                  <td
+                    class="py-2 pr-4 border-r border-gray-200 dark:border-gray-800/60"
+                  >
+                    the mask
+                  </td>
+                  <td
+                    class="py-2 px-4 border-r border-gray-200 dark:border-gray-800/60"
+                  >
+                    per (time, channel).<br />
+                    <b>Partially observed</b>
+                  </td>
+                  <td class="py-2 pl-4">
+                    per moment, constant across the width. <b>Striped</b>
+                  </td>
+                </tr>
+                <tr class="border-b border-gray-200 dark:border-gray-800/60">
+                  <td
+                    class="py-2 pr-4 border-r border-gray-200 dark:border-gray-800/60"
+                  >
+                    distinct softmaxes
+                  </td>
+                  <td
+                    class="py-2 px-4 border-r border-gray-200 dark:border-gray-800/60"
+                  >
+                    $D_b$, over $D_b$ different index sets
+                  </td>
+                  <td class="py-2 pl-4">one, repeated $D_b$ times</td>
+                </tr>
+                <tr>
+                  <td
+                    class="py-2 pr-4 border-r border-gray-200 dark:border-gray-800/60"
+                  >
+                    common width trick
+                  </td>
+                  <td
+                    class="py-2 px-4 border-r border-gray-200 dark:border-gray-800/60"
+                  >
+                    feed $[\,V_b \;\|\; M_b\,]$, so the width is $2 D_b$
+                  </td>
+                  <td class="py-2 pl-4">none, the vector goes in as it is</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          <p>
+            Two words in that table are doing a lot of work, so here they are
+            with a picture.
+          </p>
+          <ul class="mt-3 ml-6 space-y-3 list-decimal text-[18px]">
+            <li>
+              <b>Partially observed</b> is what a scalar stream's mask looks
+              like.
+              <ul class="mt-3 ml-6 space-y-3 list-disc text-[18px]">
+                <li>
+                  Take one patient with a heart rate, a temperature, a lactate
+                  and a blood CO&#8322;. A monitor writes the heart rate
+                  constantly, a nurse charts the temperature on their rounds,
+                  and the lactate and the CO&#8322; are laboratory tests ordered
+                  by different people for different reasons.
+                </li>
+                <li>
+                  So at any given moment some channels have a value and the rest
+                  do not, and there may be no moment at all at which every
+                  channel does.
+                </li>
+                <li>
+                  Read the mask down a column and you get that channel's own set
+                  of observation times; read the next column and you get a
+                  different set. Nothing lines up, and (E4) does not requires
+                  that, because each channel normalises over its own column and
+                  never looks at another.
+                </li>
+              </ul>
+            </li>
+            <li>
+              <b>Striped</b> is what a pre-embedded stream's mask looks like.
+            </li>
+            <ul class="mt-3 ml-6 space-y-3 list-disc text-[18px]">
+              <li>
+                Stay with the same patient and look at their notes instead. A
+                note was written at 6.3 hours, or it was not; there is no state
+                in which coordinate 3 of that note exists and coordinate 4 does
+                not.
+              </li>
+              <li>
+                So the mask is really one bit per moment, copied sideways across
+                all 768 coordinates (the note embedding representation). Every
+                column then has the same set of observed rows, all $D_b$
+                softmaxes agree, and the module is doing one interpolation
+                applied $D_b$ times.
+              </li>
+            </ul>
+          </ul>
+
+          <h3 class="text-xl font-semibold text-ink dark:text-white mt-8 mb-3">
+            What a striped stream lets you skip
+          </h3>
+
+          <p>
+            The two shapes are not just a visual difference. They change what
+            (E4) actually computes, and it is worth pinning down, because the
+            per-channel machinery of
+            <a
+              href="missingness.html"
+              class="text-c3 hover:text-c2 transition-colors"
+              >section 12</a
+            >
+            was built for the partially observed case and a striped stream does
+            not need it. Recall the weights from (E4) and watch the upper limit
+            of the sum:
+          </p>
+
+          <div class="my-4 py-2 text-center">
+            $$\kappa_{h,d}\big(r_k,\, t_{i,d}\big) = \frac{\exp e_{h,d}(r_k,\,
+            t_{i,d})}{\displaystyle\sum_{i'=1}^{\;L_d} \exp e_{h,d}(r_k,\,
+            t_{i',d})} \tag{E4}$$
+          </div>
+
+          <p class="mt-4">
+            On a <b>partially observed stream</b>, that $L_d$ genuinely depends
+            on the channel, because channel $d$ was observed at its own times.
+            This is the figure section 12 shows in which we have one reference
+            point and a different of available measurements to read for every
+            channel. $D_b$ distinct distributions come out, and the weight
+            tensor has a channel axis it cannot lose.
+          </p>
+
+          <p class="mt-4">
+            On a <b>striped stream</b> every channel has the same index set,
+            because the mask was one bit per moment, copied sideways. So the $d$
+            in $\kappa_{h,d}$ has nothing left to vary over. Thus, for every $d$
+            we have:
+          </p>
+
+          <div
+            class="my-3 py-3 px-2 text-center overflow-x-auto rounded-lg border border-c3/40 bg-c3/5"
+          >
+            $$\begin{aligned} \quad \kappa_{h,d} = \kappa_h\big(r_k,\, t_i\big)
+            &= \frac{\exp e_h(r_k,\, t_i)} {\displaystyle\sum_{i'=1}^{\;L_b}
+            \exp e_h(r_k,\, t_{i'})} \\[6pt] \hat{x}_{h,d}(r_k) &=
+            \sum_{i=1}^{L_b} \kappa_h\big(r_k,\, t_i\big)\, v_{i,d}
+            \end{aligned} \tag{E19}$$
+          </div>
+
+          <p>
+            One distribution per $(h, k)$, applied to every coordinate. Three
+            things follow, and they are the answer to what gets skipped.
+          </p>
+
+          <ol class="mt-3 ml-6 space-y-3 list-decimal">
+            <li>
+              <b>One softmax instead of $D_b$.</b> We normalise once and reuse
+              the result across the width, rather than running the same
+              arithmetic 768 times over 768 identical index sets.
+            </li>
+            <li>
+              <b>The weight tensor loses an axis.</b> It is $H \times K \times
+              L_b$ rather than $H \times K \times L_b \times D_b$.
+            </li>
+            <li>
+              <b>(E5) becomes an ordinary matrix multiply.</b> Weights of shape
+              $K \times L_b$ times values of shape $L_b \times D_b$ gives $K
+              \times D_b$, in one call, with no per-channel anything.
+            </li>
+          </ol>
+
+          <p class="mt-4">
+            Which is worth saying plainly:
+            <span class="hl-c3"
+              >on a pre-embedded stream, mTAND collapses to ordinary masked
+              attention with unprojected values</span
+            >. The query is still a time and the key is still a time, so it is
+            still doing the job of
+            <a
+              href="attention_as_interpolation.html"
+              class="text-c3 hover:text-c2 transition-colors"
+              >section 10</a
+            >, but the per-channel apparatus that section 12 needed has quietly
+            become a no-op.
+          </p>
+
+          <figure class="my-10">
+            <!-- prettier-ignore -->
+            <svg
+              class="mtan-fig w-full"
+              viewBox="0 0 720 500"
+              role="img"
+              aria-labelledby="figE-title figE-desc"
+            >
+              <title id="figE-title">Partially observed and striped, on one patient</title>
+              <desc id="figE-desc">
+                One patient and the same eight moments throughout. Above the
+                rule, their four scalar channels: heart rate, temperature,
+                lactate and blood CO2. Observed cells are scattered, no moment
+                has all four, and lactate and CO2 never share a moment. Beside
+                it the same array handed over twice, once as the readings and
+                once as the record of where those readings are, at double width.
+                Below the rule, the same patient's notes over the same eight
+                moments, where a column is one coordinate of the note embedding,
+                so a note arrives whole or not at all.
+              </desc>
+
+              <style>
+                .mtan-fig { --ink:#111827; --muted:#5f6b75; --c2:#233d4d; --c3:#fe7f2d; --panel:#eaecf0; --panelstroke:rgba(35,61,77,0.35); --line:#233d4d; --faint:rgba(35,61,77,0.12); font-family: Inter, system-ui, sans-serif; }
+                .dark .mtan-fig { --ink:#e5e7eb; --muted:#9aa6b2; --c2:#7aa8c4; --c3:#fe7f2d; --panel:rgba(234,236,240,0.07); --panelstroke:rgba(254,127,45,0.3); --line:#7aa8c4; --faint:rgba(234,236,240,0.1); }
+                .mtan-fig text { fill: var(--ink); }
+                .mtan-fig .t-title { font-size: 12px; font-weight: 600; }
+                .mtan-fig .t-sh { font-size: 9.5px; fill: var(--muted); font-style: italic; }
+                .mtan-fig .t-ax { font-size: 8.5px; fill: var(--muted); }
+                .mtan-fig .out { fill: none; stroke: var(--c2); stroke-width: 1.3; }
+                .mtan-fig .ln { fill: none; stroke: var(--line); stroke-width: 1.1; }
+                .mtan-fig .rule { stroke: var(--panelstroke); stroke-width: 1; }
+              </style>
+
+              <text class="t-sh" x="8" y="16">one patient, one stay, the same eight moments everywhere. a row is always a moment.</text>
+              <text class="t-sh" x="8" y="30">what a column means is the whole difference between the two halves.</text>
+
+              <text class="t-sec-x" x="8" y="52" style="font-size:10px;fill:var(--muted);letter-spacing:0.08em;text-transform:uppercase">the scalar channels</text>
+
+              <text class="t-title" x="50" y="76">partially observed</text>
+              <text class="t-title" x="172" y="76">the same, beside its own mask</text>
+              <text class="t-ax" text-anchor="end" x="46" y="118.0">0.2 h</text>
+              <text class="t-ax" text-anchor="end" x="46" y="133.0">1.0 h</text>
+              <text class="t-ax" text-anchor="end" x="46" y="148.0">3.5 h</text>
+              <text class="t-ax" text-anchor="end" x="46" y="163.0">6.3 h</text>
+              <text class="t-ax" text-anchor="end" x="46" y="178.0">12 h</text>
+              <text class="t-ax" text-anchor="end" x="46" y="193.0">18.7 h</text>
+              <text class="t-ax" text-anchor="end" x="46" y="208.0">30 h</text>
+              <text class="t-ax" text-anchor="end" x="46" y="223.0">44.2 h</text>
+              <text class="t-ax" transform="rotate(-90 60.0 102)" x="60.0" y="102">HR</text>
+              <text class="t-ax" transform="rotate(-90 75.0 102)" x="75.0" y="102">temp</text>
+              <text class="t-ax" transform="rotate(-90 90.0 102)" x="90.0" y="102">lact</text>
+              <text class="t-ax" transform="rotate(-90 105.0 102)" x="105.0" y="102">CO&#8322;</text>
+              <rect x="50.0" y="108.0" width="13" height="13" rx="1.5" fill="var(--c3)" />
+              <rect x="65.0" y="108.0" width="13" height="13" rx="1.5" fill="var(--c3)" />
+              <rect x="80.0" y="108.0" width="13" height="13" rx="1.5" fill="var(--faint)" />
+              <rect x="95.0" y="108.0" width="13" height="13" rx="1.5" fill="var(--faint)" />
+              <rect x="50.0" y="123.0" width="13" height="13" rx="1.5" fill="var(--c3)" />
+              <rect x="65.0" y="123.0" width="13" height="13" rx="1.5" fill="var(--faint)" />
+              <rect x="80.0" y="123.0" width="13" height="13" rx="1.5" fill="var(--faint)" />
+              <rect x="95.0" y="123.0" width="13" height="13" rx="1.5" fill="var(--faint)" />
+              <rect x="50.0" y="138.0" width="13" height="13" rx="1.5" fill="var(--c3)" />
+              <rect x="65.0" y="138.0" width="13" height="13" rx="1.5" fill="var(--faint)" />
+              <rect x="80.0" y="138.0" width="13" height="13" rx="1.5" fill="var(--c3)" />
+              <rect x="95.0" y="138.0" width="13" height="13" rx="1.5" fill="var(--faint)" />
+              <rect x="50.0" y="153.0" width="13" height="13" rx="1.5" fill="var(--faint)" />
+              <rect x="65.0" y="153.0" width="13" height="13" rx="1.5" fill="var(--c3)" />
+              <rect x="80.0" y="153.0" width="13" height="13" rx="1.5" fill="var(--faint)" />
+              <rect x="95.0" y="153.0" width="13" height="13" rx="1.5" fill="var(--c3)" />
+              <rect x="50.0" y="168.0" width="13" height="13" rx="1.5" fill="var(--c3)" />
+              <rect x="65.0" y="168.0" width="13" height="13" rx="1.5" fill="var(--faint)" />
+              <rect x="80.0" y="168.0" width="13" height="13" rx="1.5" fill="var(--c3)" />
+              <rect x="95.0" y="168.0" width="13" height="13" rx="1.5" fill="var(--faint)" />
+              <rect x="50.0" y="183.0" width="13" height="13" rx="1.5" fill="var(--c3)" />
+              <rect x="65.0" y="183.0" width="13" height="13" rx="1.5" fill="var(--c3)" />
+              <rect x="80.0" y="183.0" width="13" height="13" rx="1.5" fill="var(--faint)" />
+              <rect x="95.0" y="183.0" width="13" height="13" rx="1.5" fill="var(--faint)" />
+              <rect x="50.0" y="198.0" width="13" height="13" rx="1.5" fill="var(--faint)" />
+              <rect x="65.0" y="198.0" width="13" height="13" rx="1.5" fill="var(--faint)" />
+              <rect x="80.0" y="198.0" width="13" height="13" rx="1.5" fill="var(--faint)" />
+              <rect x="95.0" y="198.0" width="13" height="13" rx="1.5" fill="var(--c3)" />
+              <rect x="50.0" y="213.0" width="13" height="13" rx="1.5" fill="var(--c3)" />
+              <rect x="65.0" y="213.0" width="13" height="13" rx="1.5" fill="var(--faint)" />
+              <rect x="80.0" y="213.0" width="13" height="13" rx="1.5" fill="var(--c3)" />
+              <rect x="95.0" y="213.0" width="13" height="13" rx="1.5" fill="var(--faint)" />
+              <rect class="out" x="80.0" y="107.5" width="13" height="119.0" rx="2.5" />
+              <rect class="out" x="95.0" y="107.5" width="13" height="119.0" rx="2.5" />
+              <text class="t-ax" transform="rotate(-90 182.0 102)" x="182.0" y="102">HR</text>
+              <text class="t-ax" transform="rotate(-90 197.0 102)" x="197.0" y="102">temp</text>
+              <text class="t-ax" transform="rotate(-90 212.0 102)" x="212.0" y="102">lact</text>
+              <text class="t-ax" transform="rotate(-90 227.0 102)" x="227.0" y="102">CO&#8322;</text>
+              <rect x="172.0" y="108.0" width="13" height="13" rx="1.5" fill="var(--c3)" />
+              <rect x="187.0" y="108.0" width="13" height="13" rx="1.5" fill="var(--c3)" />
+              <rect x="202.0" y="108.0" width="13" height="13" rx="1.5" fill="var(--faint)" />
+              <rect x="217.0" y="108.0" width="13" height="13" rx="1.5" fill="var(--faint)" />
+              <rect x="172.0" y="123.0" width="13" height="13" rx="1.5" fill="var(--c3)" />
+              <rect x="187.0" y="123.0" width="13" height="13" rx="1.5" fill="var(--faint)" />
+              <rect x="202.0" y="123.0" width="13" height="13" rx="1.5" fill="var(--faint)" />
+              <rect x="217.0" y="123.0" width="13" height="13" rx="1.5" fill="var(--faint)" />
+              <rect x="172.0" y="138.0" width="13" height="13" rx="1.5" fill="var(--c3)" />
+              <rect x="187.0" y="138.0" width="13" height="13" rx="1.5" fill="var(--faint)" />
+              <rect x="202.0" y="138.0" width="13" height="13" rx="1.5" fill="var(--c3)" />
+              <rect x="217.0" y="138.0" width="13" height="13" rx="1.5" fill="var(--faint)" />
+              <rect x="172.0" y="153.0" width="13" height="13" rx="1.5" fill="var(--faint)" />
+              <rect x="187.0" y="153.0" width="13" height="13" rx="1.5" fill="var(--c3)" />
+              <rect x="202.0" y="153.0" width="13" height="13" rx="1.5" fill="var(--faint)" />
+              <rect x="217.0" y="153.0" width="13" height="13" rx="1.5" fill="var(--c3)" />
+              <rect x="172.0" y="168.0" width="13" height="13" rx="1.5" fill="var(--c3)" />
+              <rect x="187.0" y="168.0" width="13" height="13" rx="1.5" fill="var(--faint)" />
+              <rect x="202.0" y="168.0" width="13" height="13" rx="1.5" fill="var(--c3)" />
+              <rect x="217.0" y="168.0" width="13" height="13" rx="1.5" fill="var(--faint)" />
+              <rect x="172.0" y="183.0" width="13" height="13" rx="1.5" fill="var(--c3)" />
+              <rect x="187.0" y="183.0" width="13" height="13" rx="1.5" fill="var(--c3)" />
+              <rect x="202.0" y="183.0" width="13" height="13" rx="1.5" fill="var(--faint)" />
+              <rect x="217.0" y="183.0" width="13" height="13" rx="1.5" fill="var(--faint)" />
+              <rect x="172.0" y="198.0" width="13" height="13" rx="1.5" fill="var(--faint)" />
+              <rect x="187.0" y="198.0" width="13" height="13" rx="1.5" fill="var(--faint)" />
+              <rect x="202.0" y="198.0" width="13" height="13" rx="1.5" fill="var(--faint)" />
+              <rect x="217.0" y="198.0" width="13" height="13" rx="1.5" fill="var(--c3)" />
+              <rect x="172.0" y="213.0" width="13" height="13" rx="1.5" fill="var(--c3)" />
+              <rect x="187.0" y="213.0" width="13" height="13" rx="1.5" fill="var(--faint)" />
+              <rect x="202.0" y="213.0" width="13" height="13" rx="1.5" fill="var(--c3)" />
+              <rect x="217.0" y="213.0" width="13" height="13" rx="1.5" fill="var(--faint)" />
+              <text class="t-ax" transform="rotate(-90 254.0 102)" x="254.0" y="102">HR</text>
+              <text class="t-ax" transform="rotate(-90 269.0 102)" x="269.0" y="102">temp</text>
+              <text class="t-ax" transform="rotate(-90 284.0 102)" x="284.0" y="102">lact</text>
+              <text class="t-ax" transform="rotate(-90 299.0 102)" x="299.0" y="102">CO&#8322;</text>
+              <rect x="244.0" y="108.0" width="13" height="13" rx="1.5" fill="var(--c2)" />
+              <rect x="259.0" y="108.0" width="13" height="13" rx="1.5" fill="var(--c2)" />
+              <rect x="274.0" y="108.0" width="13" height="13" rx="1.5" fill="var(--faint)" />
+              <rect x="289.0" y="108.0" width="13" height="13" rx="1.5" fill="var(--faint)" />
+              <rect x="244.0" y="123.0" width="13" height="13" rx="1.5" fill="var(--c2)" />
+              <rect x="259.0" y="123.0" width="13" height="13" rx="1.5" fill="var(--faint)" />
+              <rect x="274.0" y="123.0" width="13" height="13" rx="1.5" fill="var(--faint)" />
+              <rect x="289.0" y="123.0" width="13" height="13" rx="1.5" fill="var(--faint)" />
+              <rect x="244.0" y="138.0" width="13" height="13" rx="1.5" fill="var(--c2)" />
+              <rect x="259.0" y="138.0" width="13" height="13" rx="1.5" fill="var(--faint)" />
+              <rect x="274.0" y="138.0" width="13" height="13" rx="1.5" fill="var(--c2)" />
+              <rect x="289.0" y="138.0" width="13" height="13" rx="1.5" fill="var(--faint)" />
+              <rect x="244.0" y="153.0" width="13" height="13" rx="1.5" fill="var(--faint)" />
+              <rect x="259.0" y="153.0" width="13" height="13" rx="1.5" fill="var(--c2)" />
+              <rect x="274.0" y="153.0" width="13" height="13" rx="1.5" fill="var(--faint)" />
+              <rect x="289.0" y="153.0" width="13" height="13" rx="1.5" fill="var(--c2)" />
+              <rect x="244.0" y="168.0" width="13" height="13" rx="1.5" fill="var(--c2)" />
+              <rect x="259.0" y="168.0" width="13" height="13" rx="1.5" fill="var(--faint)" />
+              <rect x="274.0" y="168.0" width="13" height="13" rx="1.5" fill="var(--c2)" />
+              <rect x="289.0" y="168.0" width="13" height="13" rx="1.5" fill="var(--faint)" />
+              <rect x="244.0" y="183.0" width="13" height="13" rx="1.5" fill="var(--c2)" />
+              <rect x="259.0" y="183.0" width="13" height="13" rx="1.5" fill="var(--c2)" />
+              <rect x="274.0" y="183.0" width="13" height="13" rx="1.5" fill="var(--faint)" />
+              <rect x="289.0" y="183.0" width="13" height="13" rx="1.5" fill="var(--faint)" />
+              <rect x="244.0" y="198.0" width="13" height="13" rx="1.5" fill="var(--faint)" />
+              <rect x="259.0" y="198.0" width="13" height="13" rx="1.5" fill="var(--faint)" />
+              <rect x="274.0" y="198.0" width="13" height="13" rx="1.5" fill="var(--faint)" />
+              <rect x="289.0" y="198.0" width="13" height="13" rx="1.5" fill="var(--c2)" />
+              <rect x="244.0" y="213.0" width="13" height="13" rx="1.5" fill="var(--c2)" />
+              <rect x="259.0" y="213.0" width="13" height="13" rx="1.5" fill="var(--faint)" />
+              <rect x="274.0" y="213.0" width="13" height="13" rx="1.5" fill="var(--c2)" />
+              <rect x="289.0" y="213.0" width="13" height="13" rx="1.5" fill="var(--faint)" />
+              <text class="t-sh" text-anchor="middle" x="201.0" y="240.0">the readings</text>
+              <text class="t-sh" text-anchor="middle" x="273.0" y="240.0">where they are</text>
+              <path class="ln" d="M172 248 L302 248" />
+              <text class="t-sh" text-anchor="middle" x="237.0" y="262.0">one array, width 2 D <tspan dy="2.6" font-size="78%">b</tspan></text>
+
+              <text class="t-sh" x="340" y="114">Different people order these for different reasons, so at</text>
+              <text class="t-sh" x="340" y="127">any moment only some channels have a value. Read the</text>
+              <text class="t-sh" x="340" y="140">mask down a column and you get that channel's own</text>
+              <text class="t-sh" x="340" y="153">observation times; read the next and you get a different</text>
+              <text class="t-sh" x="340" y="166">set. The two outlined columns, lactate and CO&#8322;, never</text>
+              <text class="t-sh" x="340" y="179">once land on the same moment.</text>
+
+              <line class="rule" x1="8" y1="290" x2="712" y2="290" />
+
+              <text class="t-sec-x" x="8" y="316" style="font-size:10px;fill:var(--muted);letter-spacing:0.08em;text-transform:uppercase">the same patient's notes</text>
+              <text class="t-title" x="50" y="340">striped</text>
+              <text class="t-ax" text-anchor="end" x="46" y="376.0">0.2 h</text>
+              <text class="t-ax" text-anchor="end" x="46" y="391.0">1.0 h</text>
+              <text class="t-ax" text-anchor="end" x="46" y="406.0">3.5 h</text>
+              <text class="t-ax" text-anchor="end" x="46" y="421.0">6.3 h</text>
+              <text class="t-ax" text-anchor="end" x="46" y="436.0">12 h</text>
+              <text class="t-ax" text-anchor="end" x="46" y="451.0">18.7 h</text>
+              <text class="t-ax" text-anchor="end" x="46" y="466.0">30 h</text>
+              <text class="t-ax" text-anchor="end" x="46" y="481.0">44.2 h</text>
+              <text class="t-ax" transform="rotate(-90 60.0 360)" x="60.0" y="360">1</text>
+              <text class="t-ax" transform="rotate(-90 75.0 360)" x="75.0" y="360">2</text>
+              <text class="t-ax" transform="rotate(-90 90.0 360)" x="90.0" y="360">3</text>
+              <text class="t-ax" transform="rotate(-90 105.0 360)" x="105.0" y="360">...</text>
+              <text class="t-ax" transform="rotate(-90 120.0 360)" x="120.0" y="360">768</text>
+              <rect x="50.0" y="366.0" width="13" height="13" rx="1.5" fill="var(--faint)" />
+              <rect x="65.0" y="366.0" width="13" height="13" rx="1.5" fill="var(--faint)" />
+              <rect x="80.0" y="366.0" width="13" height="13" rx="1.5" fill="var(--faint)" />
+              <rect x="95.0" y="366.0" width="13" height="13" rx="1.5" fill="var(--faint)" />
+              <rect x="110.0" y="366.0" width="13" height="13" rx="1.5" fill="var(--faint)" />
+              <rect x="50.0" y="381.0" width="13" height="13" rx="1.5" fill="var(--c3)" />
+              <rect x="65.0" y="381.0" width="13" height="13" rx="1.5" fill="var(--c3)" />
+              <rect x="80.0" y="381.0" width="13" height="13" rx="1.5" fill="var(--c3)" />
+              <rect x="95.0" y="381.0" width="13" height="13" rx="1.5" fill="var(--c3)" />
+              <rect x="110.0" y="381.0" width="13" height="13" rx="1.5" fill="var(--c3)" />
+              <rect x="50.0" y="396.0" width="13" height="13" rx="1.5" fill="var(--faint)" />
+              <rect x="65.0" y="396.0" width="13" height="13" rx="1.5" fill="var(--faint)" />
+              <rect x="80.0" y="396.0" width="13" height="13" rx="1.5" fill="var(--faint)" />
+              <rect x="95.0" y="396.0" width="13" height="13" rx="1.5" fill="var(--faint)" />
+              <rect x="110.0" y="396.0" width="13" height="13" rx="1.5" fill="var(--faint)" />
+              <rect x="50.0" y="411.0" width="13" height="13" rx="1.5" fill="var(--c3)" />
+              <rect x="65.0" y="411.0" width="13" height="13" rx="1.5" fill="var(--c3)" />
+              <rect x="80.0" y="411.0" width="13" height="13" rx="1.5" fill="var(--c3)" />
+              <rect x="95.0" y="411.0" width="13" height="13" rx="1.5" fill="var(--c3)" />
+              <rect x="110.0" y="411.0" width="13" height="13" rx="1.5" fill="var(--c3)" />
+              <rect x="50.0" y="426.0" width="13" height="13" rx="1.5" fill="var(--faint)" />
+              <rect x="65.0" y="426.0" width="13" height="13" rx="1.5" fill="var(--faint)" />
+              <rect x="80.0" y="426.0" width="13" height="13" rx="1.5" fill="var(--faint)" />
+              <rect x="95.0" y="426.0" width="13" height="13" rx="1.5" fill="var(--faint)" />
+              <rect x="110.0" y="426.0" width="13" height="13" rx="1.5" fill="var(--faint)" />
+              <rect x="50.0" y="441.0" width="13" height="13" rx="1.5" fill="var(--faint)" />
+              <rect x="65.0" y="441.0" width="13" height="13" rx="1.5" fill="var(--faint)" />
+              <rect x="80.0" y="441.0" width="13" height="13" rx="1.5" fill="var(--faint)" />
+              <rect x="95.0" y="441.0" width="13" height="13" rx="1.5" fill="var(--faint)" />
+              <rect x="110.0" y="441.0" width="13" height="13" rx="1.5" fill="var(--faint)" />
+              <rect x="50.0" y="456.0" width="13" height="13" rx="1.5" fill="var(--c3)" />
+              <rect x="65.0" y="456.0" width="13" height="13" rx="1.5" fill="var(--c3)" />
+              <rect x="80.0" y="456.0" width="13" height="13" rx="1.5" fill="var(--c3)" />
+              <rect x="95.0" y="456.0" width="13" height="13" rx="1.5" fill="var(--c3)" />
+              <rect x="110.0" y="456.0" width="13" height="13" rx="1.5" fill="var(--c3)" />
+              <rect x="50.0" y="471.0" width="13" height="13" rx="1.5" fill="var(--faint)" />
+              <rect x="65.0" y="471.0" width="13" height="13" rx="1.5" fill="var(--faint)" />
+              <rect x="80.0" y="471.0" width="13" height="13" rx="1.5" fill="var(--faint)" />
+              <rect x="95.0" y="471.0" width="13" height="13" rx="1.5" fill="var(--faint)" />
+              <rect x="110.0" y="471.0" width="13" height="13" rx="1.5" fill="var(--faint)" />
+              <rect class="out" x="48.0" y="409.0" width="77.0" height="17" rx="2.5" />
+
+              <text class="t-sh" x="340" y="372">Here a column is one coordinate of the note embedding,</text>
+              <text class="t-sh" x="340" y="385">not a channel. A note was written at 1.0 h, 6.3 h and</text>
+              <text class="t-sh" x="340" y="398">30 h, and when one was, all 768 of its numbers arrived</text>
+              <text class="t-sh" x="340" y="411">together. There is no state in which coordinate 3 of a</text>
+              <text class="t-sh" x="340" y="424">note exists and coordinate 4 does not, so every column</text>
+              <text class="t-sh" x="340" y="437">carries the same set of observed rows.</text>
+            </svg>
+            <figcaption
+              class="mt-3 text-sm text-muted max-w-2xl mx-auto text-center"
+            >
+              Different between partially observed and striped.
+            </figcaption>
+          </figure>
+
+          <p>The streams disagree about three things:</p>
+
+          <ol class="mt-3 ml-6 space-y-3 list-decimal">
+            <li>
+              <b>When they arrive.</b> No two streams necessarily share a
+              timestamp, and there is probably no instant at which all of them
+              exist.
+            </li>
+            <li>
+              <b>How often.</b> $L_b$ can be two thousand for one stream and
+              three for another.
+            </li>
+            <li>
+              <b>How wide.</b> $D_b$ can be $3$ for a handful of scalars and
+              $768$ for the output of a large encoder.
+            </li>
+          </ol>
+
+          <p class="mt-4">
+            Run each stream through its own module, and query every one of them
+            at the <span class="hl-c3">same reference grid</span>:
+          </p>
+
+          <div
+            class="my-3 py-3 px-2 text-center rounded-lg border border-c3/40 bg-c3/5"
+          >
+            $$A_b = \operatorname{mTAND}_b\big(\mathbf{r},\, \mathcal{S}_b\big)
+            \;\in\; \mathbb{R}^{K \times J_b} \tag{E16}$$
+          </div>
+
+          <p>
+            The first two disagreements are now gone. Every stream comes back
+            with $K$ rows, indexed by the same $K$ times, however it arrived.
+            The third disagreement does not need settling at all, because a
+            differing $J_b$ is just a differing number of columns, and columns
+            concatenate:
+          </p>
+
+          <div class="my-4 py-2 text-center">
+            $$A = \big[\, A_1 \;\|\; A_2 \;\|\; \cdots \;\|\; A_B \,\big]
+            \;\in\; \mathbb{R}^{K \times \sum_b J_b} \tag{E17}$$
+          </div>
+
+          <p>
+            <span class="hl-c3"
+              >The reference grid is the common language. Each stream $b$ keeps
+              its own encoder and its own vocabulary; what they are all made to
+              agree on is <b>when</b></span
+            >. And $A$ is an ordinary array. A transformer, a recurrent network,
+            a convolution, a linear probe all can read it, and none of them ever
+            learns that the input was irregular or that it was multimodal.
+          </p>
+          <h3 class="text-xl font-semibold text-ink dark:text-white mt-8 mb-3">
+            What is shared, and what is not
+          </h3>
+
+          <div class="my-6 overflow-x-auto">
+            <table class="w-full text-[15px]">
+              <thead>
+                <tr
+                  class="text-left text-muted border-b border-gray-200 dark:border-gray-800"
+                >
+                  <th class="py-2 font-medium">shared by every stream</th>
+                  <th class="py-2 font-medium">private to stream $b$</th>
+                </tr>
+              </thead>
+              <tbody class="text-gray-700 dark:text-gray-300 align-top">
+                <tr class="border-b border-gray-200 dark:border-gray-800/60">
+                  <td class="py-2">
+                    the reference grid $\mathbf{r}$, and therefore $K$
+                  </td>
+                  <td class="py-2">the encoder $f_b$</td>
+                </tr>
+                <tr class="border-b border-gray-200 dark:border-gray-800/60">
+                  <td class="py-2">
+                    the time embedding $\boldsymbol{\phi}_h$, usually
+                  </td>
+                  <td class="py-2">the projections $W_q^h$, $W_k^h$</td>
+                </tr>
+                <tr class="border-b border-gray-200 dark:border-gray-800/60">
+                  <td class="py-2">the number of heads $H$, usually</td>
+                  <td class="py-2">the mixing tensor $U_b$</td>
+                </tr>
+                <tr>
+                  <td class="py-2">nothing else</td>
+                  <td class="py-2">
+                    its observation times, its mask, $L_b$, $D_b$, $J_b$
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          <p>
+            Sharing $\boldsymbol{\phi}_h$ is a choice rather than a requirement.
+            It is free, because (E4) never compares a key of one stream against
+            a key of another, so a stream only needs its own query and its own
+            keys to agree with each other. What sharing buys is a single
+            vocabulary for time, so that "around hour six" means the same thing
+            in every stream. What it costs is the ability to give a stream its
+            own timescales, which matters if one of them moves orders of
+            magnitude faster than the rest.
+          </p>
+          <h3 class="text-xl font-semibold text-ink dark:text-white mt-8 mb-3">
+            The two places things mix
+          </h3>
+
+          <p>
+            Worth separating, because they are easy to run together and they
+            happen at different points.
+          </p>
+
+          <ul class="mt-3 ml-6 space-y-3 list-disc">
+            <li>
+              <b>Within a stream</b>, at $U_b$ in (E6). The $D_b$ channels of
+              one stream and the $H$ heads are combined into $J_b$ numbers. This
+              is the mixing of
+              <a
+                href="missingness.html"
+                class="text-c3 hover:text-c2 transition-colors"
+                >section 12</a
+              >.
+            </li>
+            <li>
+              <b>Across streams</b>, at the concatenation in (E17), or at
+              whatever the downstream model does with the concatenated array.
+              Cross-attention between the blocks of $A$ is the obvious next
+              thing to try, and it is available precisely because the blocks now
+              have the same number of rows.
+            </li>
+          </ul>
+
+          <p class="mt-4">
+            Neither of them required the streams to be aligned. That is the
+            whole point, and it is the same argument
+            <a
+              href="channels.html"
+              class="text-c3 hover:text-c2 transition-colors"
+              >section 04</a
+            >
+            made about channels, now applied to whole modalities. The streams
+            stay independent exactly where alignment would have been required,
+            and become joint everywhere after.
+          </p>
+          <h3 class="text-xl font-semibold text-ink dark:text-white mt-8 mb-3">
+            A stream that is not there
+          </h3>
+
+          <p>
+            If a record simply has no instances of stream $b$, then $L_b = 0$,
+            its softmax has nothing to normalise over, and by by the
+            masked-normalisation argument of
+            <a
+              href="mtan_network.html"
+              class="text-c3 hover:text-c2 transition-colors"
+              >chapter 13</a
+            >, its block $A_b$ comes out as zeros of shape $K \times J_b$. The
+            concatenated array keeps exactly the same shape it would have had. A
+            downstream model trained on records where the stream is sometimes
+            present and sometimes absent sees a constant-shaped input either
+            way, and can learn what a zero block means.
+          </p>
+
+          <p class="mt-4">
+            So whole-modality missingness and single-reading missingness turn
+            out to be one mechanism at two scales, and the mechanism is the
+            range of a sum.
+          </p>
+
+          <figure class="my-10">
+            <!-- prettier-ignore -->
+            <svg
+              class="mtan-fig w-full"
+              viewBox="0 0 720 652"
+              role="img"
+              aria-labelledby="figC-title figC-desc"
+            >
+              <title id="figC-title">mTAN as a general purpose encoder, two paths</title>
+              <desc id="figC-desc">
+                Three streams arrive on one shared time axis at very different
+                rates, with a regularly spaced reference grid beneath them. The
+                first stream is scalar readings and takes path A: its encoder is
+                the identity and its mask has holes. The second and third
+                streams arrive already embedded and take path B: their encoders
+                are a language model and an embedding table, and their masks are
+                constant across the width. Both paths run their own mTAND
+                module, all queried at the same reference grid and using the
+                same time embedding, so every stream leaves as an array with K
+                rows. The three arrays are concatenated along the feature axis
+                into one array any ordinary architecture can read.
+              </desc>
+
+              <style>
+                .mtan-fig { --ink:#111827; --muted:#5f6b75; --c2:#233d4d; --c3:#fe7f2d; --panel:#eaecf0; --panelstroke:rgba(35,61,77,0.35); --line:#233d4d; --faint:rgba(35,61,77,0.12); font-family: Inter, system-ui, sans-serif; }
+                .dark .mtan-fig { --ink:#e5e7eb; --muted:#9aa6b2; --c2:#7aa8c4; --c3:#fe7f2d; --panel:rgba(234,236,240,0.07); --panelstroke:rgba(254,127,45,0.3); --line:#7aa8c4; --faint:rgba(234,236,240,0.1); }
+                .mtan-fig .bx { fill: var(--panel); stroke: var(--panelstroke); stroke-width: 1; }
+                .mtan-fig .bx-op { fill: none; stroke: var(--c3); stroke-width: 1.4; }
+                .mtan-fig .bx-sh { fill: none; stroke: var(--panelstroke); stroke-width: 1.1; stroke-dasharray: 5 4; }
+                .mtan-fig .ln { fill: none; stroke: var(--line); stroke-width: 1.1; }
+                .mtan-fig .dash { stroke-dasharray: 4 3; }
+                .mtan-fig text { fill: var(--ink); }
+                .mtan-fig .t-title { font-size: 12px; font-weight: 600; }
+                .mtan-fig .t-lab { font-size: 11px; }
+                .mtan-fig .t-sh { font-size: 9.5px; fill: var(--muted); font-style: italic; }
+                .mtan-fig .t-tag { font-size: 9.5px; fill: var(--c3); font-weight: 600; }
+                .mtan-fig .t-sec { font-size: 10px; fill: var(--muted); letter-spacing: 0.08em; text-transform: uppercase; }
+                .mtan-fig .par { fill: var(--c3); }
+              </style>
+
+              <defs>
+                <marker id="mtC-ar" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+                  <path d="M 0 0 L 10 5 L 0 10 z" fill="var(--line)" />
+                </marker>
+              </defs>
+
+              <text class="t-sec" x="8" y="14">what arrives, and when</text>
+              <rect class="bx" x="8" y="22" width="704" height="130" rx="6" />
+              <text class="t-sh" x="18" y="46">stream 1, scalars</text>
+              <line x1="194" y1="40" x2="556" y2="40" class="ln" />
+              <g fill="var(--c2)">
+              <rect x="194.0" y="34" width="1.6" height="12" />
+              <rect x="202.0" y="34" width="1.6" height="12" />
+              <rect x="210.0" y="34" width="1.6" height="12" />
+              <rect x="218.0" y="34" width="1.6" height="12" />
+              <rect x="226.0" y="34" width="1.6" height="12" />
+              <rect x="234.0" y="34" width="1.6" height="12" />
+              <rect x="242.0" y="34" width="1.6" height="12" />
+              <rect x="250.0" y="34" width="1.6" height="12" />
+              <rect x="258.0" y="34" width="1.6" height="12" />
+              <rect x="266.0" y="34" width="1.6" height="12" />
+              <rect x="274.0" y="34" width="1.6" height="12" />
+              <rect x="282.0" y="34" width="1.6" height="12" />
+              <rect x="290.0" y="34" width="1.6" height="12" />
+              <rect x="298.0" y="34" width="1.6" height="12" />
+              <rect x="346.0" y="34" width="1.6" height="12" />
+              <rect x="354.0" y="34" width="1.6" height="12" />
+              <rect x="362.0" y="34" width="1.6" height="12" />
+              <rect x="370.0" y="34" width="1.6" height="12" />
+              <rect x="378.0" y="34" width="1.6" height="12" />
+              <rect x="386.0" y="34" width="1.6" height="12" />
+              <rect x="394.0" y="34" width="1.6" height="12" />
+              <rect x="402.0" y="34" width="1.6" height="12" />
+              <rect x="410.0" y="34" width="1.6" height="12" />
+              <rect x="418.0" y="34" width="1.6" height="12" />
+              <rect x="426.0" y="34" width="1.6" height="12" />
+              <rect x="466.0" y="34" width="1.6" height="12" />
+              <rect x="474.0" y="34" width="1.6" height="12" />
+              <rect x="482.0" y="34" width="1.6" height="12" />
+              <rect x="490.0" y="34" width="1.6" height="12" />
+              <rect x="498.0" y="34" width="1.6" height="12" />
+              <rect x="506.0" y="34" width="1.6" height="12" />
+              <rect x="514.0" y="34" width="1.6" height="12" />
+              <rect x="522.0" y="34" width="1.6" height="12" />
+              <rect x="530.0" y="34" width="1.6" height="12" />
+              <rect x="538.0" y="34" width="1.6" height="12" />
+              <rect x="546.0" y="34" width="1.6" height="12" />
+              <rect x="554.0" y="34" width="1.6" height="12" />
+              </g>
+              <text class="t-sh" x="572" y="46">D <tspan dy="2.6" font-size="78%">1</tspan> numbers per tick</text>
+              <text class="t-sh" x="18" y="76">stream 2, events</text>
+              <line x1="194" y1="70" x2="556" y2="70" class="ln" />
+              <g fill="var(--c2)">
+              <rect x="198.0" y="64" width="1.6" height="12" />
+              <rect x="226.0" y="64" width="1.6" height="12" />
+              <rect x="251.0" y="64" width="1.6" height="12" />
+              <rect x="285.0" y="64" width="1.6" height="12" />
+              <rect x="316.0" y="64" width="1.6" height="12" />
+              <rect x="348.0" y="64" width="1.6" height="12" />
+              <rect x="383.0" y="64" width="1.6" height="12" />
+              <rect x="410.0" y="64" width="1.6" height="12" />
+              <rect x="447.0" y="64" width="1.6" height="12" />
+              <rect x="489.0" y="64" width="1.6" height="12" />
+              <rect x="540.0" y="64" width="1.6" height="12" />
+              </g>
+              <text class="t-sh" x="572" y="76">one vector per tick</text>
+              <text class="t-sh" x="18" y="106">stream 3, events</text>
+              <line x1="194" y1="100" x2="556" y2="100" class="ln" />
+              <g fill="var(--c2)">
+              <rect x="205.0" y="94" width="1.6" height="12" />
+              <rect x="331.0" y="94" width="1.6" height="12" />
+              <rect x="520.0" y="94" width="1.6" height="12" />
+              </g>
+              <text class="t-sh" x="572" y="106">one vector per tick</text>
+              <text class="t-sh" x="18" y="136">reference grid r</text>
+              <line x1="194" y1="130" x2="556" y2="130" class="ln dash" />
+              <g fill="var(--c3)"><rect x="194.0" y="123" width="2.4" height="14" /><rect x="239.2" y="123" width="2.4" height="14" /><rect x="284.5" y="123" width="2.4" height="14" /><rect x="329.8" y="123" width="2.4" height="14" /><rect x="375.0" y="123" width="2.4" height="14" /><rect x="420.2" y="123" width="2.4" height="14" /><rect x="465.5" y="123" width="2.4" height="14" /><rect x="510.8" y="123" width="2.4" height="14" /><rect x="556.0" y="123" width="2.4" height="14" /></g>
+              <text class="t-sh" x="572" y="136">K = ours to choose</text>
+
+              <rect class="bx" x="8" y="164" width="704" height="34" rx="6" />
+              <circle class="par" cx="20" cy="176" r="3.2" />
+              <text class="t-title" x="30" y="180">shared by every stream: the reference grid r, and the time embedding &#966;<tspan dy="2.6" font-size="78%">h</tspan></text>
+              <text class="t-sh" x="30" y="192">nothing else is shared. this is what puts the streams on a common clock.</text>
+              <text class="t-tag" x="684" y="194">E1</text>
+
+              <rect class="bx-sh" x="4" y="222" width="600" height="78" rx="8" />
+              <text class="t-sec" x="10" y="218">path A &#183; scalars &#183; channels are the measured quantities, mask has holes</text>
+              <rect class="bx-sh" x="4" y="320" width="600" height="126" rx="8" />
+              <text class="t-sec" x="10" y="316">path B &#183; already embedded &#183; channels are the encoder width, mask is striped</text>
+              <text class="t-tag" x="666" y="218">E16</text>
+              <rect class="bx" x="8" y="232" width="250" height="42" rx="6" />
+              
+              <text class="t-title" x="18" y="247">f<tspan dy="2.6" font-size="78%">1</tspan><tspan dy="-2.6"> = identity</tspan></text>
+              <text class="t-sh" x="18" y="262">then [ V<tspan dy="2.6" font-size="78%">1</tspan><tspan dy="-2.6"> &#8214; M</tspan><tspan dy="2.6" font-size="78%">1</tspan><tspan dy="-2.6"> ], values beside their own mask</tspan></text>
+              <path class="ln" d="M258 253 L296 253" marker-end="url(#mtC-ar)" />
+              <text class="t-sh" text-anchor="middle" x="277" y="246">L<tspan dy="2.6" font-size="78%">1</tspan><tspan dy="-2.6"> </tspan> &#215; D<tspan dy="2.6" font-size="78%">1</tspan></text>
+              <rect class="bx-op" x="302" y="232" width="294" height="42" rx="6" />
+              <text class="t-title" x="312" y="247">mTAND<tspan dy="2.6" font-size="78%">1</tspan></text>
+              <text class="t-sh" x="312" y="262">out: K &#215; J<tspan dy="2.6" font-size="78%">1</tspan></text>
+              <path class="ln" d="M596 253 L620 253 L620 468" marker-end="url(#mtC-ar)" />
+              <rect class="bx" x="8" y="330" width="250" height="42" rx="6" />
+              <circle class="par" cx="18" cy="340" r="3.2" />
+              <text class="t-title" x="27" y="345">f<tspan dy="2.6" font-size="78%">2</tspan><tspan dy="-2.6"> : an encoder per event</tspan></text>
+              <text class="t-sh" x="18" y="360">a language model, a vision backbone</text>
+              <path class="ln" d="M258 351 L296 351" marker-end="url(#mtC-ar)" />
+              <text class="t-sh" text-anchor="middle" x="277" y="344">L<tspan dy="2.6" font-size="78%">2</tspan><tspan dy="-2.6"> </tspan> &#215; D<tspan dy="2.6" font-size="78%">2</tspan></text>
+              <rect class="bx-op" x="302" y="330" width="294" height="42" rx="6" />
+              <text class="t-title" x="312" y="345">mTAND<tspan dy="2.6" font-size="78%">2</tspan></text>
+              <text class="t-sh" x="312" y="360">out: K &#215; J<tspan dy="2.6" font-size="78%">2</tspan></text>
+              <path class="ln" d="M596 351 L640 351 L640 468" marker-end="url(#mtC-ar)" />
+              <rect class="bx" x="8" y="392" width="250" height="42" rx="6" />
+              <circle class="par" cx="18" cy="402" r="3.2" />
+              <text class="t-title" x="27" y="407">f<tspan dy="2.6" font-size="78%">3</tspan><tspan dy="-2.6"> : an embedding table</tspan></text>
+              <text class="t-sh" x="18" y="422">one learned vector per code</text>
+              <path class="ln" d="M258 413 L296 413" marker-end="url(#mtC-ar)" />
+              <text class="t-sh" text-anchor="middle" x="277" y="406">L<tspan dy="2.6" font-size="78%">3</tspan><tspan dy="-2.6"> </tspan> &#215; D<tspan dy="2.6" font-size="78%">3</tspan></text>
+              <rect class="bx-op" x="302" y="392" width="294" height="42" rx="6" />
+              <text class="t-title" x="312" y="407">mTAND<tspan dy="2.6" font-size="78%">3</tspan></text>
+              <text class="t-sh" x="312" y="422">out: K &#215; J<tspan dy="2.6" font-size="78%">3</tspan></text>
+              <path class="ln" d="M596 413 L660 413 L660 468" marker-end="url(#mtC-ar)" />
+
+              <rect class="bx-op" x="302" y="468" width="398" height="42" rx="6" />
+              <text class="t-title" x="312" y="486">concatenate along the feature axis</text>
+              <text class="t-sh" x="312" y="500">the rows already line up: every module answered at the same K times</text>
+              <text class="t-tag" x="672" y="504">E17</text>
+              <path class="ln" d="M500 510 L500 542" marker-end="url(#mtC-ar)" />
+              <text class="t-sh" x="506" y="530">K &#215; (J<tspan dy="2.6" font-size="78%">1</tspan> + J<tspan dy="2.6" font-size="78%">2</tspan> + J<tspan dy="2.6" font-size="78%">3</tspan>)</text>
+
+              <text class="t-sec" x="8" y="536">anything can read this</text>
+              <rect class="bx" x="8" y="542" width="170" height="34" rx="6" />
+              <text class="t-lab" x="18" y="563">a transformer</text>
+              <rect class="bx" x="186" y="542" width="170" height="34" rx="6" />
+              <text class="t-lab" x="196" y="563">a recurrent net</text>
+              <rect class="bx" x="364" y="542" width="170" height="34" rx="6" />
+              <text class="t-lab" x="374" y="563">a 1D convnet</text>
+              <rect class="bx" x="542" y="542" width="170" height="34" rx="6" />
+              <text class="t-lab" x="552" y="563">a linear probe</text>
+              <text class="t-sh" x="8" y="592">none of them learns that the input was irregular, or that it was multimodal. that was all spent upstream.</text>
+
+              <line x1="8" y1="618" x2="712" y2="618" stroke="var(--panelstroke)" stroke-width="1" />
+              <text class="t-sec" x="8" y="636">legend</text>
+              <circle class="par" cx="80" cy="632" r="3.2" />
+              <text class="t-sh" x="89" y="636">holds learned parameters</text>
+              <rect class="bx-op" x="250" y="626" width="14" height="10" rx="2" />
+              <text class="t-sh" x="269" y="636">the operative step</text>
+              <rect class="bx" x="410" y="626" width="14" height="10" rx="2" />
+              <text class="t-sh" x="429" y="636">an ordinary layer</text>
+              <rect class="bx-sh" x="570" y="626" width="14" height="10" rx="2" />
+              <text class="t-sh" x="589" y="636">a path, not a block</text>
+            </svg>
+            <figcaption
+              class="mt-3 text-sm text-muted max-w-2xl mx-auto text-center"
+            >
+              mTAN used as an encoder underneath something else. Three streams
+              arrive at wildly different rates and in different formats, each
+              gets whatever encoder it needs, and each is then resampled onto
+              one shared reference grid. Read the three horizontal lanes as
+              independent until the moment they are stacked.
+            </figcaption>
+          </figure>
+
+          <figure class="my-10">
+            <!-- prettier-ignore -->
+            <svg
+              class="mtan-fig w-full"
+              viewBox="0 0 720 420"
+              role="img"
+              aria-labelledby="figD-title figD-desc"
+            >
+              <title id="figD-title">What the arrays look like, before and after</title>
+              <desc id="figD-desc">
+                Above, three input arrays of completely different shapes. The
+                scalar stream is tall and narrow with a mask full of holes,
+                because each column is observed at its own times. The two
+                embedded streams are short and wide with solid rows, because an
+                event is either present or absent as a whole. Below, after each
+                has gone through its own mTAND queried at the same K reference
+                points, all three come back with exactly K rows and no holes,
+                differing only in width, and they concatenate into one dense
+                array.
+              </desc>
+
+              <style>
+                .mtan-fig { --ink:#111827; --muted:#5f6b75; --c2:#233d4d; --c3:#fe7f2d; --panel:#eaecf0; --panelstroke:rgba(35,61,77,0.35); --line:#233d4d; --faint:rgba(35,61,77,0.12); font-family: Inter, system-ui, sans-serif; }
+                .dark .mtan-fig { --ink:#e5e7eb; --muted:#9aa6b2; --c2:#7aa8c4; --c3:#fe7f2d; --panel:rgba(234,236,240,0.07); --panelstroke:rgba(254,127,45,0.3); --line:#7aa8c4; --faint:rgba(234,236,240,0.1); }
+                .mtan-fig .ln { fill: none; stroke: var(--line); stroke-width: 1.1; }
+                .mtan-fig .dash { stroke-dasharray: 4 3; }
+                .mtan-fig text { fill: var(--ink); }
+                .mtan-fig .t-title { font-size: 12px; font-weight: 600; }
+                .mtan-fig .t-sh { font-size: 9.5px; fill: var(--muted); font-style: italic; }
+                .mtan-fig .t-sec { font-size: 10px; fill: var(--muted); letter-spacing: 0.08em; text-transform: uppercase; }
+                .mtan-fig .t-tag { font-size: 9.5px; fill: var(--c3); font-weight: 600; }
+              </style>
+
+              <defs>
+                <marker id="mtD-ar" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+                  <path d="M 0 0 L 10 5 L 0 10 z" fill="var(--line)" />
+                </marker>
+              </defs>
+
+              <text class="t-sec" x="8" y="16">before &#183; three different shapes</text>
+
+              <text class="t-title" x="24" y="42">stream 1, scalars</text>
+              <g>
+              <rect x="24.0" y="52.0" width="13" height="13" rx="1.5" fill="var(--c3)" />
+              <rect x="39.0" y="52.0" width="13" height="13" rx="1.5" fill="var(--faint)" />
+              <rect x="54.0" y="52.0" width="13" height="13" rx="1.5" fill="var(--faint)" />
+              <rect x="69.0" y="52.0" width="13" height="13" rx="1.5" fill="var(--c3)" />
+              <rect x="84.0" y="52.0" width="13" height="13" rx="1.5" fill="var(--faint)" />
+              <rect x="24.0" y="67.0" width="13" height="13" rx="1.5" fill="var(--c3)" />
+              <rect x="39.0" y="67.0" width="13" height="13" rx="1.5" fill="var(--c3)" />
+              <rect x="54.0" y="67.0" width="13" height="13" rx="1.5" fill="var(--faint)" />
+              <rect x="69.0" y="67.0" width="13" height="13" rx="1.5" fill="var(--faint)" />
+              <rect x="84.0" y="67.0" width="13" height="13" rx="1.5" fill="var(--faint)" />
+              <rect x="24.0" y="82.0" width="13" height="13" rx="1.5" fill="var(--c3)" />
+              <rect x="39.0" y="82.0" width="13" height="13" rx="1.5" fill="var(--faint)" />
+              <rect x="54.0" y="82.0" width="13" height="13" rx="1.5" fill="var(--faint)" />
+              <rect x="69.0" y="82.0" width="13" height="13" rx="1.5" fill="var(--faint)" />
+              <rect x="84.0" y="82.0" width="13" height="13" rx="1.5" fill="var(--c3)" />
+              <rect x="24.0" y="97.0" width="13" height="13" rx="1.5" fill="var(--c3)" />
+              <rect x="39.0" y="97.0" width="13" height="13" rx="1.5" fill="var(--faint)" />
+              <rect x="54.0" y="97.0" width="13" height="13" rx="1.5" fill="var(--c3)" />
+              <rect x="69.0" y="97.0" width="13" height="13" rx="1.5" fill="var(--faint)" />
+              <rect x="84.0" y="97.0" width="13" height="13" rx="1.5" fill="var(--faint)" />
+              <rect x="24.0" y="112.0" width="13" height="13" rx="1.5" fill="var(--c3)" />
+              <rect x="39.0" y="112.0" width="13" height="13" rx="1.5" fill="var(--c3)" />
+              <rect x="54.0" y="112.0" width="13" height="13" rx="1.5" fill="var(--faint)" />
+              <rect x="69.0" y="112.0" width="13" height="13" rx="1.5" fill="var(--c3)" />
+              <rect x="84.0" y="112.0" width="13" height="13" rx="1.5" fill="var(--faint)" />
+              <rect x="24.0" y="127.0" width="13" height="13" rx="1.5" fill="var(--c3)" />
+              <rect x="39.0" y="127.0" width="13" height="13" rx="1.5" fill="var(--faint)" />
+              <rect x="54.0" y="127.0" width="13" height="13" rx="1.5" fill="var(--faint)" />
+              <rect x="69.0" y="127.0" width="13" height="13" rx="1.5" fill="var(--faint)" />
+              <rect x="84.0" y="127.0" width="13" height="13" rx="1.5" fill="var(--faint)" />
+              <rect x="24.0" y="142.0" width="13" height="13" rx="1.5" fill="var(--c3)" />
+              <rect x="39.0" y="142.0" width="13" height="13" rx="1.5" fill="var(--faint)" />
+              <rect x="54.0" y="142.0" width="13" height="13" rx="1.5" fill="var(--faint)" />
+              <rect x="69.0" y="142.0" width="13" height="13" rx="1.5" fill="var(--faint)" />
+              <rect x="84.0" y="142.0" width="13" height="13" rx="1.5" fill="var(--c3)" />
+              </g>
+              <text class="t-sh" x="24" y="171.0">L<tspan dy="2.6" font-size="78%">1</tspan> &#215; D<tspan dy="2.6" font-size="78%">1</tspan>, mask full of holes.</text>
+              <text class="t-sh" x="24" y="184.0">tall, narrow, ragged. every column has</text>
+              <text class="t-sh" x="24" y="197.0">its own set of observed rows.</text>
+
+              <text class="t-title" x="252" y="42">stream 2, embedded events</text>
+              <g>
+              <rect x="252.0" y="52.0" width="13" height="13" rx="1.5" fill="var(--c3)" />
+              <rect x="267.0" y="52.0" width="13" height="13" rx="1.5" fill="var(--c3)" />
+              <rect x="282.0" y="52.0" width="13" height="13" rx="1.5" fill="var(--c3)" />
+              <rect x="297.0" y="52.0" width="13" height="13" rx="1.5" fill="var(--c3)" />
+              <rect x="312.0" y="52.0" width="13" height="13" rx="1.5" fill="var(--c3)" />
+              <rect x="327.0" y="52.0" width="13" height="13" rx="1.5" fill="var(--c3)" />
+              <rect x="342.0" y="52.0" width="13" height="13" rx="1.5" fill="var(--c3)" />
+              <rect x="357.0" y="52.0" width="13" height="13" rx="1.5" fill="var(--c3)" />
+              <rect x="372.0" y="52.0" width="13" height="13" rx="1.5" fill="var(--c3)" />
+              <rect x="387.0" y="52.0" width="13" height="13" rx="1.5" fill="var(--c3)" />
+              <rect x="402.0" y="52.0" width="13" height="13" rx="1.5" fill="var(--c3)" />
+              <rect x="417.0" y="52.0" width="13" height="13" rx="1.5" fill="var(--c3)" />
+              <rect x="252.0" y="67.0" width="13" height="13" rx="1.5" fill="var(--c3)" />
+              <rect x="267.0" y="67.0" width="13" height="13" rx="1.5" fill="var(--c3)" />
+              <rect x="282.0" y="67.0" width="13" height="13" rx="1.5" fill="var(--c3)" />
+              <rect x="297.0" y="67.0" width="13" height="13" rx="1.5" fill="var(--c3)" />
+              <rect x="312.0" y="67.0" width="13" height="13" rx="1.5" fill="var(--c3)" />
+              <rect x="327.0" y="67.0" width="13" height="13" rx="1.5" fill="var(--c3)" />
+              <rect x="342.0" y="67.0" width="13" height="13" rx="1.5" fill="var(--c3)" />
+              <rect x="357.0" y="67.0" width="13" height="13" rx="1.5" fill="var(--c3)" />
+              <rect x="372.0" y="67.0" width="13" height="13" rx="1.5" fill="var(--c3)" />
+              <rect x="387.0" y="67.0" width="13" height="13" rx="1.5" fill="var(--c3)" />
+              <rect x="402.0" y="67.0" width="13" height="13" rx="1.5" fill="var(--c3)" />
+              <rect x="417.0" y="67.0" width="13" height="13" rx="1.5" fill="var(--c3)" />
+              <rect x="252.0" y="82.0" width="13" height="13" rx="1.5" fill="var(--c3)" />
+              <rect x="267.0" y="82.0" width="13" height="13" rx="1.5" fill="var(--c3)" />
+              <rect x="282.0" y="82.0" width="13" height="13" rx="1.5" fill="var(--c3)" />
+              <rect x="297.0" y="82.0" width="13" height="13" rx="1.5" fill="var(--c3)" />
+              <rect x="312.0" y="82.0" width="13" height="13" rx="1.5" fill="var(--c3)" />
+              <rect x="327.0" y="82.0" width="13" height="13" rx="1.5" fill="var(--c3)" />
+              <rect x="342.0" y="82.0" width="13" height="13" rx="1.5" fill="var(--c3)" />
+              <rect x="357.0" y="82.0" width="13" height="13" rx="1.5" fill="var(--c3)" />
+              <rect x="372.0" y="82.0" width="13" height="13" rx="1.5" fill="var(--c3)" />
+              <rect x="387.0" y="82.0" width="13" height="13" rx="1.5" fill="var(--c3)" />
+              <rect x="402.0" y="82.0" width="13" height="13" rx="1.5" fill="var(--c3)" />
+              <rect x="417.0" y="82.0" width="13" height="13" rx="1.5" fill="var(--c3)" />
+              </g>
+              <text class="t-sh" x="252" y="111.0">L<tspan dy="2.6" font-size="78%">2</tspan> &#215; D<tspan dy="2.6" font-size="78%">2</tspan>, solid rows.</text>
+              <text class="t-sh" x="252" y="124.0">short and wide. an event is present or</text>
+              <text class="t-sh" x="252" y="137.0">absent whole, never partly.</text>
+
+              <text class="t-title" x="496" y="42">stream 3, embedded events</text>
+              <g>
+              <rect x="496.0" y="52.0" width="13" height="13" rx="1.5" fill="var(--c3)" />
+              <rect x="511.0" y="52.0" width="13" height="13" rx="1.5" fill="var(--c3)" />
+              <rect x="526.0" y="52.0" width="13" height="13" rx="1.5" fill="var(--c3)" />
+              <rect x="541.0" y="52.0" width="13" height="13" rx="1.5" fill="var(--c3)" />
+              <rect x="556.0" y="52.0" width="13" height="13" rx="1.5" fill="var(--c3)" />
+              <rect x="571.0" y="52.0" width="13" height="13" rx="1.5" fill="var(--c3)" />
+              <rect x="586.0" y="52.0" width="13" height="13" rx="1.5" fill="var(--c3)" />
+              <rect x="601.0" y="52.0" width="13" height="13" rx="1.5" fill="var(--c3)" />
+              <rect x="616.0" y="52.0" width="13" height="13" rx="1.5" fill="var(--c3)" />
+              <rect x="631.0" y="52.0" width="13" height="13" rx="1.5" fill="var(--c3)" />
+              <rect x="646.0" y="52.0" width="13" height="13" rx="1.5" fill="var(--c3)" />
+              <rect x="661.0" y="52.0" width="13" height="13" rx="1.5" fill="var(--c3)" />
+              <rect x="496.0" y="67.0" width="13" height="13" rx="1.5" fill="var(--c3)" />
+              <rect x="511.0" y="67.0" width="13" height="13" rx="1.5" fill="var(--c3)" />
+              <rect x="526.0" y="67.0" width="13" height="13" rx="1.5" fill="var(--c3)" />
+              <rect x="541.0" y="67.0" width="13" height="13" rx="1.5" fill="var(--c3)" />
+              <rect x="556.0" y="67.0" width="13" height="13" rx="1.5" fill="var(--c3)" />
+              <rect x="571.0" y="67.0" width="13" height="13" rx="1.5" fill="var(--c3)" />
+              <rect x="586.0" y="67.0" width="13" height="13" rx="1.5" fill="var(--c3)" />
+              <rect x="601.0" y="67.0" width="13" height="13" rx="1.5" fill="var(--c3)" />
+              <rect x="616.0" y="67.0" width="13" height="13" rx="1.5" fill="var(--c3)" />
+              <rect x="631.0" y="67.0" width="13" height="13" rx="1.5" fill="var(--c3)" />
+              <rect x="646.0" y="67.0" width="13" height="13" rx="1.5" fill="var(--c3)" />
+              <rect x="661.0" y="67.0" width="13" height="13" rx="1.5" fill="var(--c3)" />
+              </g>
+              <text class="t-sh" x="496" y="96.0">L<tspan dy="2.6" font-size="78%">3</tspan> &#215; D<tspan dy="2.6" font-size="78%">3</tspan>, solid rows.</text>
+              <text class="t-sh" x="496" y="109.0">two events in the whole record, and</text>
+              <text class="t-sh" x="496" y="122.0">the shape below will not notice.</text>
+
+              <path class="ln" d="M360 242 L360 276" marker-end="url(#mtD-ar)" />
+              <text class="t-sh" text-anchor="middle" x="352" y="234">each through its own mTAND, all queried at the same K reference points</text>
+              <text class="t-tag" x="640" y="234">E16</text>
+
+              <text class="t-sec" x="8" y="288">after &#183; same height, any width</text>
+              <g>
+              <rect x="24.0" y="300.0" width="13" height="13" rx="1.5" fill="var(--c2)" />
+              <rect x="39.0" y="300.0" width="13" height="13" rx="1.5" fill="var(--c2)" />
+              <rect x="54.0" y="300.0" width="13" height="13" rx="1.5" fill="var(--c2)" />
+              <rect x="69.0" y="300.0" width="13" height="13" rx="1.5" fill="var(--c2)" />
+              <rect x="24.0" y="315.0" width="13" height="13" rx="1.5" fill="var(--c2)" />
+              <rect x="39.0" y="315.0" width="13" height="13" rx="1.5" fill="var(--c2)" />
+              <rect x="54.0" y="315.0" width="13" height="13" rx="1.5" fill="var(--c2)" />
+              <rect x="69.0" y="315.0" width="13" height="13" rx="1.5" fill="var(--c2)" />
+              <rect x="24.0" y="330.0" width="13" height="13" rx="1.5" fill="var(--c2)" />
+              <rect x="39.0" y="330.0" width="13" height="13" rx="1.5" fill="var(--c2)" />
+              <rect x="54.0" y="330.0" width="13" height="13" rx="1.5" fill="var(--c2)" />
+              <rect x="69.0" y="330.0" width="13" height="13" rx="1.5" fill="var(--c2)" />
+              <rect x="24.0" y="345.0" width="13" height="13" rx="1.5" fill="var(--c2)" />
+              <rect x="39.0" y="345.0" width="13" height="13" rx="1.5" fill="var(--c2)" />
+              <rect x="54.0" y="345.0" width="13" height="13" rx="1.5" fill="var(--c2)" />
+              <rect x="69.0" y="345.0" width="13" height="13" rx="1.5" fill="var(--c2)" />
+              <rect x="24.0" y="360.0" width="13" height="13" rx="1.5" fill="var(--c2)" />
+              <rect x="39.0" y="360.0" width="13" height="13" rx="1.5" fill="var(--c2)" />
+              <rect x="54.0" y="360.0" width="13" height="13" rx="1.5" fill="var(--c2)" />
+              <rect x="69.0" y="360.0" width="13" height="13" rx="1.5" fill="var(--c2)" />
+              <rect x="24.0" y="375.0" width="13" height="13" rx="1.5" fill="var(--c2)" />
+              <rect x="39.0" y="375.0" width="13" height="13" rx="1.5" fill="var(--c2)" />
+              <rect x="54.0" y="375.0" width="13" height="13" rx="1.5" fill="var(--c2)" />
+              <rect x="69.0" y="375.0" width="13" height="13" rx="1.5" fill="var(--c2)" />
+              </g>
+              <text class="t-sh" x="24" y="404.0">K &#215; J<tspan dy="2.6" font-size="78%">1</tspan></text>
+              <g>
+              <rect x="160.0" y="300.0" width="13" height="13" rx="1.5" fill="var(--c2)" />
+              <rect x="175.0" y="300.0" width="13" height="13" rx="1.5" fill="var(--c2)" />
+              <rect x="190.0" y="300.0" width="13" height="13" rx="1.5" fill="var(--c2)" />
+              <rect x="205.0" y="300.0" width="13" height="13" rx="1.5" fill="var(--c2)" />
+              <rect x="220.0" y="300.0" width="13" height="13" rx="1.5" fill="var(--c2)" />
+              <rect x="160.0" y="315.0" width="13" height="13" rx="1.5" fill="var(--c2)" />
+              <rect x="175.0" y="315.0" width="13" height="13" rx="1.5" fill="var(--c2)" />
+              <rect x="190.0" y="315.0" width="13" height="13" rx="1.5" fill="var(--c2)" />
+              <rect x="205.0" y="315.0" width="13" height="13" rx="1.5" fill="var(--c2)" />
+              <rect x="220.0" y="315.0" width="13" height="13" rx="1.5" fill="var(--c2)" />
+              <rect x="160.0" y="330.0" width="13" height="13" rx="1.5" fill="var(--c2)" />
+              <rect x="175.0" y="330.0" width="13" height="13" rx="1.5" fill="var(--c2)" />
+              <rect x="190.0" y="330.0" width="13" height="13" rx="1.5" fill="var(--c2)" />
+              <rect x="205.0" y="330.0" width="13" height="13" rx="1.5" fill="var(--c2)" />
+              <rect x="220.0" y="330.0" width="13" height="13" rx="1.5" fill="var(--c2)" />
+              <rect x="160.0" y="345.0" width="13" height="13" rx="1.5" fill="var(--c2)" />
+              <rect x="175.0" y="345.0" width="13" height="13" rx="1.5" fill="var(--c2)" />
+              <rect x="190.0" y="345.0" width="13" height="13" rx="1.5" fill="var(--c2)" />
+              <rect x="205.0" y="345.0" width="13" height="13" rx="1.5" fill="var(--c2)" />
+              <rect x="220.0" y="345.0" width="13" height="13" rx="1.5" fill="var(--c2)" />
+              <rect x="160.0" y="360.0" width="13" height="13" rx="1.5" fill="var(--c2)" />
+              <rect x="175.0" y="360.0" width="13" height="13" rx="1.5" fill="var(--c2)" />
+              <rect x="190.0" y="360.0" width="13" height="13" rx="1.5" fill="var(--c2)" />
+              <rect x="205.0" y="360.0" width="13" height="13" rx="1.5" fill="var(--c2)" />
+              <rect x="220.0" y="360.0" width="13" height="13" rx="1.5" fill="var(--c2)" />
+              <rect x="160.0" y="375.0" width="13" height="13" rx="1.5" fill="var(--c2)" />
+              <rect x="175.0" y="375.0" width="13" height="13" rx="1.5" fill="var(--c2)" />
+              <rect x="190.0" y="375.0" width="13" height="13" rx="1.5" fill="var(--c2)" />
+              <rect x="205.0" y="375.0" width="13" height="13" rx="1.5" fill="var(--c2)" />
+              <rect x="220.0" y="375.0" width="13" height="13" rx="1.5" fill="var(--c2)" />
+              </g>
+              <text class="t-sh" x="160" y="404.0">K &#215; J<tspan dy="2.6" font-size="78%">2</tspan></text>
+              <g>
+              <rect x="311.0" y="300.0" width="13" height="13" rx="1.5" fill="var(--c2)" />
+              <rect x="326.0" y="300.0" width="13" height="13" rx="1.5" fill="var(--c2)" />
+              <rect x="341.0" y="300.0" width="13" height="13" rx="1.5" fill="var(--c2)" />
+              <rect x="311.0" y="315.0" width="13" height="13" rx="1.5" fill="var(--c2)" />
+              <rect x="326.0" y="315.0" width="13" height="13" rx="1.5" fill="var(--c2)" />
+              <rect x="341.0" y="315.0" width="13" height="13" rx="1.5" fill="var(--c2)" />
+              <rect x="311.0" y="330.0" width="13" height="13" rx="1.5" fill="var(--c2)" />
+              <rect x="326.0" y="330.0" width="13" height="13" rx="1.5" fill="var(--c2)" />
+              <rect x="341.0" y="330.0" width="13" height="13" rx="1.5" fill="var(--c2)" />
+              <rect x="311.0" y="345.0" width="13" height="13" rx="1.5" fill="var(--c2)" />
+              <rect x="326.0" y="345.0" width="13" height="13" rx="1.5" fill="var(--c2)" />
+              <rect x="341.0" y="345.0" width="13" height="13" rx="1.5" fill="var(--c2)" />
+              <rect x="311.0" y="360.0" width="13" height="13" rx="1.5" fill="var(--c2)" />
+              <rect x="326.0" y="360.0" width="13" height="13" rx="1.5" fill="var(--c2)" />
+              <rect x="341.0" y="360.0" width="13" height="13" rx="1.5" fill="var(--c2)" />
+              <rect x="311.0" y="375.0" width="13" height="13" rx="1.5" fill="var(--c2)" />
+              <rect x="326.0" y="375.0" width="13" height="13" rx="1.5" fill="var(--c2)" />
+              <rect x="341.0" y="375.0" width="13" height="13" rx="1.5" fill="var(--c2)" />
+              </g>
+              <text class="t-sh" x="311" y="404.0">K &#215; J<tspan dy="2.6" font-size="78%">3</tspan></text>
+
+              <path class="ln dash" d="M406 340 L444 340" marker-end="url(#mtD-ar)" />
+              <text class="t-sh" x="404" y="330">stack</text>
+
+              <g>
+              <rect x="452.0" y="300.0" width="13" height="13" rx="1.5" fill="var(--c2)" />
+              <rect x="467.0" y="300.0" width="13" height="13" rx="1.5" fill="var(--c2)" />
+              <rect x="482.0" y="300.0" width="13" height="13" rx="1.5" fill="var(--c2)" />
+              <rect x="497.0" y="300.0" width="13" height="13" rx="1.5" fill="var(--c2)" />
+              <rect x="512.0" y="300.0" width="13" height="13" rx="1.5" fill="var(--c2)" />
+              <rect x="527.0" y="300.0" width="13" height="13" rx="1.5" fill="var(--c2)" />
+              <rect x="542.0" y="300.0" width="13" height="13" rx="1.5" fill="var(--c2)" />
+              <rect x="557.0" y="300.0" width="13" height="13" rx="1.5" fill="var(--c2)" />
+              <rect x="572.0" y="300.0" width="13" height="13" rx="1.5" fill="var(--c2)" />
+              <rect x="587.0" y="300.0" width="13" height="13" rx="1.5" fill="var(--c2)" />
+              <rect x="602.0" y="300.0" width="13" height="13" rx="1.5" fill="var(--c2)" />
+              <rect x="617.0" y="300.0" width="13" height="13" rx="1.5" fill="var(--c2)" />
+              <rect x="452.0" y="315.0" width="13" height="13" rx="1.5" fill="var(--c2)" />
+              <rect x="467.0" y="315.0" width="13" height="13" rx="1.5" fill="var(--c2)" />
+              <rect x="482.0" y="315.0" width="13" height="13" rx="1.5" fill="var(--c2)" />
+              <rect x="497.0" y="315.0" width="13" height="13" rx="1.5" fill="var(--c2)" />
+              <rect x="512.0" y="315.0" width="13" height="13" rx="1.5" fill="var(--c2)" />
+              <rect x="527.0" y="315.0" width="13" height="13" rx="1.5" fill="var(--c2)" />
+              <rect x="542.0" y="315.0" width="13" height="13" rx="1.5" fill="var(--c2)" />
+              <rect x="557.0" y="315.0" width="13" height="13" rx="1.5" fill="var(--c2)" />
+              <rect x="572.0" y="315.0" width="13" height="13" rx="1.5" fill="var(--c2)" />
+              <rect x="587.0" y="315.0" width="13" height="13" rx="1.5" fill="var(--c2)" />
+              <rect x="602.0" y="315.0" width="13" height="13" rx="1.5" fill="var(--c2)" />
+              <rect x="617.0" y="315.0" width="13" height="13" rx="1.5" fill="var(--c2)" />
+              <rect x="452.0" y="330.0" width="13" height="13" rx="1.5" fill="var(--c2)" />
+              <rect x="467.0" y="330.0" width="13" height="13" rx="1.5" fill="var(--c2)" />
+              <rect x="482.0" y="330.0" width="13" height="13" rx="1.5" fill="var(--c2)" />
+              <rect x="497.0" y="330.0" width="13" height="13" rx="1.5" fill="var(--c2)" />
+              <rect x="512.0" y="330.0" width="13" height="13" rx="1.5" fill="var(--c2)" />
+              <rect x="527.0" y="330.0" width="13" height="13" rx="1.5" fill="var(--c2)" />
+              <rect x="542.0" y="330.0" width="13" height="13" rx="1.5" fill="var(--c2)" />
+              <rect x="557.0" y="330.0" width="13" height="13" rx="1.5" fill="var(--c2)" />
+              <rect x="572.0" y="330.0" width="13" height="13" rx="1.5" fill="var(--c2)" />
+              <rect x="587.0" y="330.0" width="13" height="13" rx="1.5" fill="var(--c2)" />
+              <rect x="602.0" y="330.0" width="13" height="13" rx="1.5" fill="var(--c2)" />
+              <rect x="617.0" y="330.0" width="13" height="13" rx="1.5" fill="var(--c2)" />
+              <rect x="452.0" y="345.0" width="13" height="13" rx="1.5" fill="var(--c2)" />
+              <rect x="467.0" y="345.0" width="13" height="13" rx="1.5" fill="var(--c2)" />
+              <rect x="482.0" y="345.0" width="13" height="13" rx="1.5" fill="var(--c2)" />
+              <rect x="497.0" y="345.0" width="13" height="13" rx="1.5" fill="var(--c2)" />
+              <rect x="512.0" y="345.0" width="13" height="13" rx="1.5" fill="var(--c2)" />
+              <rect x="527.0" y="345.0" width="13" height="13" rx="1.5" fill="var(--c2)" />
+              <rect x="542.0" y="345.0" width="13" height="13" rx="1.5" fill="var(--c2)" />
+              <rect x="557.0" y="345.0" width="13" height="13" rx="1.5" fill="var(--c2)" />
+              <rect x="572.0" y="345.0" width="13" height="13" rx="1.5" fill="var(--c2)" />
+              <rect x="587.0" y="345.0" width="13" height="13" rx="1.5" fill="var(--c2)" />
+              <rect x="602.0" y="345.0" width="13" height="13" rx="1.5" fill="var(--c2)" />
+              <rect x="617.0" y="345.0" width="13" height="13" rx="1.5" fill="var(--c2)" />
+              <rect x="452.0" y="360.0" width="13" height="13" rx="1.5" fill="var(--c2)" />
+              <rect x="467.0" y="360.0" width="13" height="13" rx="1.5" fill="var(--c2)" />
+              <rect x="482.0" y="360.0" width="13" height="13" rx="1.5" fill="var(--c2)" />
+              <rect x="497.0" y="360.0" width="13" height="13" rx="1.5" fill="var(--c2)" />
+              <rect x="512.0" y="360.0" width="13" height="13" rx="1.5" fill="var(--c2)" />
+              <rect x="527.0" y="360.0" width="13" height="13" rx="1.5" fill="var(--c2)" />
+              <rect x="542.0" y="360.0" width="13" height="13" rx="1.5" fill="var(--c2)" />
+              <rect x="557.0" y="360.0" width="13" height="13" rx="1.5" fill="var(--c2)" />
+              <rect x="572.0" y="360.0" width="13" height="13" rx="1.5" fill="var(--c2)" />
+              <rect x="587.0" y="360.0" width="13" height="13" rx="1.5" fill="var(--c2)" />
+              <rect x="602.0" y="360.0" width="13" height="13" rx="1.5" fill="var(--c2)" />
+              <rect x="617.0" y="360.0" width="13" height="13" rx="1.5" fill="var(--c2)" />
+              <rect x="452.0" y="375.0" width="13" height="13" rx="1.5" fill="var(--c2)" />
+              <rect x="467.0" y="375.0" width="13" height="13" rx="1.5" fill="var(--c2)" />
+              <rect x="482.0" y="375.0" width="13" height="13" rx="1.5" fill="var(--c2)" />
+              <rect x="497.0" y="375.0" width="13" height="13" rx="1.5" fill="var(--c2)" />
+              <rect x="512.0" y="375.0" width="13" height="13" rx="1.5" fill="var(--c2)" />
+              <rect x="527.0" y="375.0" width="13" height="13" rx="1.5" fill="var(--c2)" />
+              <rect x="542.0" y="375.0" width="13" height="13" rx="1.5" fill="var(--c2)" />
+              <rect x="557.0" y="375.0" width="13" height="13" rx="1.5" fill="var(--c2)" />
+              <rect x="572.0" y="375.0" width="13" height="13" rx="1.5" fill="var(--c2)" />
+              <rect x="587.0" y="375.0" width="13" height="13" rx="1.5" fill="var(--c2)" />
+              <rect x="602.0" y="375.0" width="13" height="13" rx="1.5" fill="var(--c2)" />
+              <rect x="617.0" y="375.0" width="13" height="13" rx="1.5" fill="var(--c2)" />
+              </g>
+              <line x1="511.0" y1="296" x2="511.0" y2="392" stroke="var(--c3)" stroke-width="1.4" />
+              <line x1="586.0" y1="296" x2="586.0" y2="392" stroke="var(--c3)" stroke-width="1.4" />
+              <text class="t-sh" x="452" y="404.0">K &#215; (J<tspan dy="2.6" font-size="78%">1</tspan> + J<tspan dy="2.6" font-size="78%">2</tspan> + J<tspan dy="2.6" font-size="78%">3</tspan>), one dense array</text>
+            </svg>
+            <figcaption
+              class="mt-3 text-sm text-muted max-w-2xl mx-auto text-center"
+            >
+              The same three streams, drawn as the arrays they actually are.
+              Above the arrow nothing shares a shape and one of the masks is
+              full of holes. Below it every block has the same K rows and no
+              holes at all, which is the only thing the module was ever asked to
+              arrange.
+            </figcaption>
+          </figure>
+
+          <p>
+            Read the diagram right to left and the claim of this chapter is
+            visible in one line. Everything on the right is ordinary in the
+            sense that it's a rectangle of fixed size, regularly indexed, that
+            any architecture can consume. Everything on the left is the "mess"
+            that real measurement produces. The module is the only thing between
+            them, and all it needed in order to do that job was the observation
+            that
+            <span class="hl-c3"
+              >a query does not have to come from the data, and a value does not
+              have to be a number</span
+            >.
+          </p>
+          <h3 class="text-xl font-semibold text-ink dark:text-white mt-8 mb-3">
+            So what is the attention actually doing to a note?
+          </h3>
+
+          <p>
+            Worth answering directly, because the explanation so far makes it
+            sound like the attention is barely working. It is doing exactly as
+            much work as before.
+          </p>
+
+          <p class="mt-4">
+            Keep the same patient and give them three streams: their vitals and
+            labs, their notes, and the diagnosis codes from prior admissions.
+            The scalar stream has been covered at length, so take it as given
+            that it arrives as $K \times J_1$. Look at the notes instead. Three
+            were written, at 1.0 h, 6.3 h and 30 h, and a language model turned
+            each into 768 numbers. We want five rows, at 0, 12, 24, 36 and 48
+            hours, because that is the grid every other stream is being resolved
+            onto.
+          </p>
+
+          <p class="mt-4">
+            There is no note at hour 12. There is no note at hour 24, 36 or 48
+            either. Every row we want is a row nobody wrote. That is the problem
+            the attention solves, and it solves it the same way it solved it for
+            the lactate: by asking how close hour 12 is to each of the three
+            moments a note exists, and blending.
+          </p>
+
+          <figure class="my-10">
+            <!-- prettier-ignore -->
+            <svg
+              class="mtan-fig w-full"
+              viewBox="0 0 720 218"
+              role="img"
+              aria-labelledby="figF-title figF-desc"
+            >
+              <title id="figF-title">What the attention does to three notes</title>
+              <desc id="figF-desc">
+                A chain of matrices. The first is the attention weights, five
+                rows by three columns, one row per reference point and one
+                column per note, every row summing to one. It multiplies the
+                three note embeddings, three by 768, giving five by 768: one
+                blended note vector for every reference point, including the
+                reference points at which no note was written. A final linear
+                map narrows that to five by J.
+              </desc>
+
+              <style>
+                .mtan-fig { --ink:#111827; --muted:#5f6b75; --c2:#233d4d; --c3:#fe7f2d; --panel:#eaecf0; --panelstroke:rgba(35,61,77,0.35); --line:#233d4d; --faint:rgba(35,61,77,0.12); font-family: Inter, system-ui, sans-serif; }
+                .dark .mtan-fig { --ink:#e5e7eb; --muted:#9aa6b2; --c2:#7aa8c4; --c3:#fe7f2d; --panel:rgba(234,236,240,0.07); --panelstroke:rgba(254,127,45,0.3); --line:#7aa8c4; --faint:rgba(234,236,240,0.1); }
+                .mtan-fig text { fill: var(--ink); }
+                .mtan-fig .t-title { font-size: 11.5px; font-weight: 600; }
+                .mtan-fig .t-sh { font-size: 9.5px; fill: var(--muted); font-style: italic; }
+                .mtan-fig .t-ax { font-size: 8.5px; fill: var(--muted); }
+                .mtan-fig .t-num { font-size: 9px; }
+                .mtan-fig .t-op { font-size: 15px; fill: var(--muted); }
+                .mtan-fig .ln { fill: none; stroke: var(--line); stroke-width: 1.1; }
+              </style>
+
+              <defs>
+                <marker id="mtF-ar" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+                  <path d="M 0 0 L 10 5 L 0 10 z" fill="var(--line)" />
+                </marker>
+              </defs>
+
+              <text class="t-sh" x="8" y="16">one patient's notes: three irregular arrivals, five regular rows out.</text>
+
+              <text class="t-title" x="88" y="40">attention weights</text>
+              <text class="t-sh" x="88" y="54">5 &#215; 3, every row sums to 1</text>
+              <text class="t-ax" text-anchor="middle" x="104.0" y="70">1.0 h</text>
+              <text class="t-ax" text-anchor="middle" x="138.0" y="70">6.3 h</text>
+              <text class="t-ax" text-anchor="middle" x="172.0" y="70">30 h</text>
+              <text class="t-ax" text-anchor="end" x="80" y="91.0">0 h</text>
+              <rect x="88.0" y="78.0" width="32" height="17" rx="2" fill="var(--faint)" />
+              <text class="t-num" text-anchor="middle" x="104.0" y="91.0">.72</text>
+              <rect x="122.0" y="78.0" width="32" height="17" rx="2" fill="var(--faint)" />
+              <text class="t-num" text-anchor="middle" x="138.0" y="91.0">.25</text>
+              <rect x="156.0" y="78.0" width="32" height="17" rx="2" fill="var(--faint)" />
+              <text class="t-num" text-anchor="middle" x="172.0" y="91.0">.03</text>
+              <text class="t-ax" text-anchor="end" x="80" y="110.0">12 h</text>
+              <rect x="88.0" y="97.0" width="32" height="17" rx="2" fill="var(--faint)" />
+              <text class="t-num" text-anchor="middle" x="104.0" y="110.0">.14</text>
+              <rect x="122.0" y="97.0" width="32" height="17" rx="2" fill="var(--faint)" />
+              <text class="t-num" text-anchor="middle" x="138.0" y="110.0">.63</text>
+              <rect x="156.0" y="97.0" width="32" height="17" rx="2" fill="var(--faint)" />
+              <text class="t-num" text-anchor="middle" x="172.0" y="110.0">.23</text>
+              <text class="t-ax" text-anchor="end" x="80" y="129.0">24 h</text>
+              <rect x="88.0" y="116.0" width="32" height="17" rx="2" fill="var(--faint)" />
+              <text class="t-num" text-anchor="middle" x="104.0" y="129.0">.04</text>
+              <rect x="122.0" y="116.0" width="32" height="17" rx="2" fill="var(--faint)" />
+              <text class="t-num" text-anchor="middle" x="138.0" y="129.0">.31</text>
+              <rect x="156.0" y="116.0" width="32" height="17" rx="2" fill="var(--faint)" />
+              <text class="t-num" text-anchor="middle" x="172.0" y="129.0">.65</text>
+              <text class="t-ax" text-anchor="end" x="80" y="148.0">36 h</text>
+              <rect x="88.0" y="135.0" width="32" height="17" rx="2" fill="var(--faint)" />
+              <text class="t-num" text-anchor="middle" x="104.0" y="148.0">.02</text>
+              <rect x="122.0" y="135.0" width="32" height="17" rx="2" fill="var(--faint)" />
+              <text class="t-num" text-anchor="middle" x="138.0" y="148.0">.13</text>
+              <rect x="156.0" y="135.0" width="32" height="17" rx="2" fill="var(--faint)" />
+              <text class="t-num" text-anchor="middle" x="172.0" y="148.0">.85</text>
+              <text class="t-ax" text-anchor="end" x="80" y="167.0">48 h</text>
+              <rect x="88.0" y="154.0" width="32" height="17" rx="2" fill="var(--faint)" />
+              <text class="t-num" text-anchor="middle" x="104.0" y="167.0">.02</text>
+              <rect x="122.0" y="154.0" width="32" height="17" rx="2" fill="var(--faint)" />
+              <text class="t-num" text-anchor="middle" x="138.0" y="167.0">.09</text>
+              <rect x="156.0" y="154.0" width="32" height="17" rx="2" fill="var(--faint)" />
+              <text class="t-num" text-anchor="middle" x="172.0" y="167.0">.89</text>
+              <text class="t-sh" x="8" y="189">a row per reference point, a column per note</text>
+
+              <text class="t-op" x="198" y="130.5">&#215;</text>
+
+              <text class="t-title" x="232" y="40">the notes</text>
+              <text class="t-sh" x="232" y="54">3 &#215; 768</text>
+              <rect x="232.0" y="104.0" width="13" height="13" rx="1.5" fill="var(--c3)" />
+              <rect x="247.0" y="104.0" width="13" height="13" rx="1.5" fill="var(--c3)" />
+              <rect x="262.0" y="104.0" width="13" height="13" rx="1.5" fill="var(--c3)" />
+              <rect x="277.0" y="104.0" width="13" height="13" rx="1.5" fill="var(--c3)" />
+              <rect x="292.0" y="104.0" width="13" height="13" rx="1.5" fill="var(--c3)" />
+              <rect x="307.0" y="104.0" width="13" height="13" rx="1.5" fill="var(--c3)" />
+              <rect x="232.0" y="119.0" width="13" height="13" rx="1.5" fill="var(--c3)" />
+              <rect x="247.0" y="119.0" width="13" height="13" rx="1.5" fill="var(--c3)" />
+              <rect x="262.0" y="119.0" width="13" height="13" rx="1.5" fill="var(--c3)" />
+              <rect x="277.0" y="119.0" width="13" height="13" rx="1.5" fill="var(--c3)" />
+              <rect x="292.0" y="119.0" width="13" height="13" rx="1.5" fill="var(--c3)" />
+              <rect x="307.0" y="119.0" width="13" height="13" rx="1.5" fill="var(--c3)" />
+              <rect x="232.0" y="134.0" width="13" height="13" rx="1.5" fill="var(--c3)" />
+              <rect x="247.0" y="134.0" width="13" height="13" rx="1.5" fill="var(--c3)" />
+              <rect x="262.0" y="134.0" width="13" height="13" rx="1.5" fill="var(--c3)" />
+              <rect x="277.0" y="134.0" width="13" height="13" rx="1.5" fill="var(--c3)" />
+              <rect x="292.0" y="134.0" width="13" height="13" rx="1.5" fill="var(--c3)" />
+              <rect x="307.0" y="134.0" width="13" height="13" rx="1.5" fill="var(--c3)" />
+              <text class="t-sh" x="232" y="165">straight from the encoder,</text>
+              <text class="t-sh" x="232" y="178">unprojected</text>
+
+              <text class="t-op" x="332" y="130.5">=</text>
+
+              <text class="t-title" x="366" y="40">one note per row</text>
+              <text class="t-sh" x="366" y="54">5 &#215; 768</text>
+              <rect x="366.0" y="89.0" width="13" height="13" rx="1.5" fill="var(--c2)" />
+              <rect x="381.0" y="89.0" width="13" height="13" rx="1.5" fill="var(--c2)" />
+              <rect x="396.0" y="89.0" width="13" height="13" rx="1.5" fill="var(--c2)" />
+              <rect x="411.0" y="89.0" width="13" height="13" rx="1.5" fill="var(--c2)" />
+              <rect x="426.0" y="89.0" width="13" height="13" rx="1.5" fill="var(--c2)" />
+              <rect x="441.0" y="89.0" width="13" height="13" rx="1.5" fill="var(--c2)" />
+              <rect x="366.0" y="104.0" width="13" height="13" rx="1.5" fill="var(--c2)" />
+              <rect x="381.0" y="104.0" width="13" height="13" rx="1.5" fill="var(--c2)" />
+              <rect x="396.0" y="104.0" width="13" height="13" rx="1.5" fill="var(--c2)" />
+              <rect x="411.0" y="104.0" width="13" height="13" rx="1.5" fill="var(--c2)" />
+              <rect x="426.0" y="104.0" width="13" height="13" rx="1.5" fill="var(--c2)" />
+              <rect x="441.0" y="104.0" width="13" height="13" rx="1.5" fill="var(--c2)" />
+              <rect x="366.0" y="119.0" width="13" height="13" rx="1.5" fill="var(--c2)" />
+              <rect x="381.0" y="119.0" width="13" height="13" rx="1.5" fill="var(--c2)" />
+              <rect x="396.0" y="119.0" width="13" height="13" rx="1.5" fill="var(--c2)" />
+              <rect x="411.0" y="119.0" width="13" height="13" rx="1.5" fill="var(--c2)" />
+              <rect x="426.0" y="119.0" width="13" height="13" rx="1.5" fill="var(--c2)" />
+              <rect x="441.0" y="119.0" width="13" height="13" rx="1.5" fill="var(--c2)" />
+              <rect x="366.0" y="134.0" width="13" height="13" rx="1.5" fill="var(--c2)" />
+              <rect x="381.0" y="134.0" width="13" height="13" rx="1.5" fill="var(--c2)" />
+              <rect x="396.0" y="134.0" width="13" height="13" rx="1.5" fill="var(--c2)" />
+              <rect x="411.0" y="134.0" width="13" height="13" rx="1.5" fill="var(--c2)" />
+              <rect x="426.0" y="134.0" width="13" height="13" rx="1.5" fill="var(--c2)" />
+              <rect x="441.0" y="134.0" width="13" height="13" rx="1.5" fill="var(--c2)" />
+              <rect x="366.0" y="149.0" width="13" height="13" rx="1.5" fill="var(--c2)" />
+              <rect x="381.0" y="149.0" width="13" height="13" rx="1.5" fill="var(--c2)" />
+              <rect x="396.0" y="149.0" width="13" height="13" rx="1.5" fill="var(--c2)" />
+              <rect x="411.0" y="149.0" width="13" height="13" rx="1.5" fill="var(--c2)" />
+              <rect x="426.0" y="149.0" width="13" height="13" rx="1.5" fill="var(--c2)" />
+              <rect x="441.0" y="149.0" width="13" height="13" rx="1.5" fill="var(--c2)" />
+              <text class="t-sh" x="366" y="180">a blend, including at the</text>
+              <text class="t-sh" x="366" y="193">four rows with no note</text>
+
+              <path class="ln" d="M464 125.5 L542 125.5" marker-end="url(#mtF-ar)" />
+              <text class="t-sh" text-anchor="middle" x="503" y="117.5">mix by U</text>
+
+              <text class="t-title" x="552" y="40">the block</text>
+              <text class="t-sh" x="552" y="54">5 &#215; J</text>
+              <rect x="552.0" y="89.0" width="13" height="13" rx="1.5" fill="var(--c2)" />
+              <rect x="567.0" y="89.0" width="13" height="13" rx="1.5" fill="var(--c2)" />
+              <rect x="582.0" y="89.0" width="13" height="13" rx="1.5" fill="var(--c2)" />
+              <rect x="597.0" y="89.0" width="13" height="13" rx="1.5" fill="var(--c2)" />
+              <rect x="552.0" y="104.0" width="13" height="13" rx="1.5" fill="var(--c2)" />
+              <rect x="567.0" y="104.0" width="13" height="13" rx="1.5" fill="var(--c2)" />
+              <rect x="582.0" y="104.0" width="13" height="13" rx="1.5" fill="var(--c2)" />
+              <rect x="597.0" y="104.0" width="13" height="13" rx="1.5" fill="var(--c2)" />
+              <rect x="552.0" y="119.0" width="13" height="13" rx="1.5" fill="var(--c2)" />
+              <rect x="567.0" y="119.0" width="13" height="13" rx="1.5" fill="var(--c2)" />
+              <rect x="582.0" y="119.0" width="13" height="13" rx="1.5" fill="var(--c2)" />
+              <rect x="597.0" y="119.0" width="13" height="13" rx="1.5" fill="var(--c2)" />
+              <rect x="552.0" y="134.0" width="13" height="13" rx="1.5" fill="var(--c2)" />
+              <rect x="567.0" y="134.0" width="13" height="13" rx="1.5" fill="var(--c2)" />
+              <rect x="582.0" y="134.0" width="13" height="13" rx="1.5" fill="var(--c2)" />
+              <rect x="597.0" y="134.0" width="13" height="13" rx="1.5" fill="var(--c2)" />
+              <rect x="552.0" y="149.0" width="13" height="13" rx="1.5" fill="var(--c2)" />
+              <rect x="567.0" y="149.0" width="13" height="13" rx="1.5" fill="var(--c2)" />
+              <rect x="582.0" y="149.0" width="13" height="13" rx="1.5" fill="var(--c2)" />
+              <rect x="597.0" y="149.0" width="13" height="13" rx="1.5" fill="var(--c2)" />
+            </svg>
+            <figcaption
+              class="mt-3 text-sm text-muted max-w-3xl mx-auto text-center"
+            >
+              Three notes in, five rows out. The left matrix is the whole of the
+              attention: one row per reference point, one column per note, every
+              row summing to one. It is computed once and used for all 768
+              coordinates.
+            </figcaption>
+          </figure>
+
+          <p>
+            Read the second row of that weight matrix. The row for hour 12 is
+            $(0.14,\; 0.63,\; 0.23)$, so
+          </p>
+
+          <div class="my-4 py-2 text-center overflow-x-auto">
+            $$\text{row}_{12\text{h}} = 0.14\,\mathbf{v}_{1.0\text{h}} +
+            0.63\,\mathbf{v}_{6.3\text{h}} + 0.23\,\mathbf{v}_{30\text{h}}$$
+          </div>
+
+          <p>
+            a 768-dimensional vector that leans on the 6.3 hour note because it
+            is nearest, and that is a perfectly sensible answer to "what were
+            the notes saying around hour 12". It did not exist in the input.
+            <span class="hl-c3"
+              >The attention manufactured a row for a moment at which nobody
+              wrote anything</span
+            >, which is the entire job, and is exactly what it did for the
+            lactate in
+            <a
+              href="mtan_network.html"
+              class="text-c3 hover:text-c2 transition-colors"
+              >chapter 13</a
+            >.
+          </p>
+
+          <p class="mt-4">
+            What is different is only that this weight matrix is
+            <em>one</em> matrix. Coordinate 1 of the note embedding and
+            coordinate 768 get the same $(0.14, 0.63, 0.23)$, because they
+            arrived at the same instant. On the scalar stream the equivalent
+            picture is four different weight matrices, one per channel, because
+            the four channels arrived at four different sets of instants.
+          </p>
+
+          <p class="mt-4">
+            The diagnosis stream is the same story with different numbers.
+            Whatever prior codes the patient has, an embedding table turns each
+            into a vector, they arrive at whatever times they arrive, one weight
+            matrix resolves them onto the same five rows, and out comes $K
+            \times J_3$. Then all three blocks sit side by side:
+          </p>
+
+          <div class="my-4 py-2 text-center overflow-x-auto">
+            $$\underbrace{K \times J_1}_{\text{vitals and labs}} \;\Big|\;
+            \underbrace{K \times J_2}_{\text{notes}} \;\Big|\; \underbrace{K
+            \times J_3}_{\text{prior diagnoses}} \;=\; K \times (J_1 + J_2 +
+            J_3)$$
+          </div>
+
+          <p>
+            Three streams that shared no timestamp, no width and no sampling
+            rate. Their sole point of agreemeement is the reference grid.
+          </p>
+        </section>
+
+        <section>
+          <h2 class="text-2xl font-semibold text-ink dark:text-white mb-4">
+            Interpolation is not the only way in
+          </h2>
+
+          <p>
+            <a
+              href="repairs.html"
+              class="text-c3 hover:text-c2 transition-colors"
+              >Section 08</a
+            >
+            argued that forward filling a record fabricates measurements nobody
+            took, and that argument stands. But it does not reach the whole
+            case, because forward fill and mTAND fail in
+            <em>opposite</em> directions, and which failure you prefer depends
+            on the question.
+          </p>
+
+          <ul class="mt-3 ml-6 space-y-3 list-disc">
+            <li>
+              <b>Across a long gap, mTAND is confidently wrong.</b> The softmax
+              sums to one whatever the gap, so weight lands on whatever distant
+              observations exist and a smooth, plausible number comes out with
+              no indication of how far it reached. It also reaches
+              <em>forwards</em>, so the value at hour 40 can be built partly
+              from a measurement taken at hour 44.
+            </li>
+            <li>
+              <b>Across a long gap, forward fill is obviously wrong.</b> It
+              freezes the last value and holds it flat. That is a worse
+              estimate, but it is wrong in a predictable direction, it never
+              reads the future, and it carries an age you can hand to the model
+              alongside it.
+            </li>
+          </ul>
+
+          <p class="mt-4">
+            <a
+              href="https://arxiv.org/abs/2210.12156"
+              class="text-c3 hover:text-c2 underline decoration-c3/40 underline-offset-2 transition-colors"
+              target="_blank"
+              >Zhang, Li, Chen, Yan and Petzold,
+              <em
+                >Improving Medical Predictions by Irregular Multimodal
+                Electronic Health Records Modeling</em
+              ></a
+            >, ICML 2023, make the obvious move: do not choose. Run both, and
+            learn a gate that decides how much of each to use.
+          </p>
+
+          <p class="mt-4">
+            Their module takes the same stream twice. One branch discretises it
+            onto the same regular grid, forward fills the empty slots and reads
+            the result with a convolution. The other branch is mTAND as we have
+            it. Both land on the reference grid, so both come out $K \times
+            J_b$, and two arrays of the same shape can simply be blended:
+          </p>
+
+          <div
+            class="my-3 py-3 px-2 text-center rounded-lg border border-c3/40 bg-c3/5"
+          >
+            $$\begin{aligned} G = \sigma\Big( f\big(\big[\, A^{\text{fill}}_b
+            \;\|\; A^{\text{attn}}_b \,\big]\big) \Big), \\[6pt] A_b = G \odot
+            A^{\text{fill}}_b + (1 - G) \odot A^{\text{attn}}_b \end{aligned}
+            \tag{E18}$$
+          </div>
+
+          <p>
+            with $f$ a small network, $\sigma$ a sigmoid and $\odot$ an
+            elementwise product. The gate can be given three granularities, and
+            the choice is a real one: a single scalar per record, one weight per
+            reference point ($K$ of them), or one weight per reference point and
+            output coordinate ($K \times J_b$). The last is the most expressive
+            and the hardest to train.
+          </p>
+
+          <p class="mt-4">
+            Notice what makes (E18) even writable. Two entirely different
+            treatments of the same stream, one that invents values on a grid and
+            one that refuses to, become addable only because they were both
+            resolved onto the same $K$ reference points.
+            <span class="hl-c3"
+              >The grid is not just an interface to the downstream model, it is
+              an interface between rival representations of the same
+              stream</span
+            >.
+          </p>
+
+          <div class="panel-c4 rounded-lg p-5 mt-6 text-[16px]">
+            <p class="font-medium text-ink dark:text-white mb-2">
+              What the gate buys, concretely
+            </p>
+            <p>
+              Take one patient with two scalar channels: a heart rate off a
+              bedside monitor, and a lactate drawn twice in two days.
+            </p>
+            <p class="mt-3">
+              <b>On the heart rate the two branches agree.</b> There is an
+              observation within a minute or two of every reference point, so
+              the interpolation and the fill both return essentially the last
+              reading. The gate is free to pick either, and whichever it picks
+              costs nothing.
+            </p>
+            <p class="mt-3">
+              <b>On the lactate at hour 40 they disagree completely.</b> With
+              draws at hour 6 and hour 44, mTAND returns a blend of the two,
+              which is the better estimate of what the lactate actually was, and
+              which used a measurement from four hours in the future. Forward
+              fill returns the hour-6 value and nothing else, which is a worse
+              estimate and an honest one.
+            </p>
+            <p class="mt-3">
+              A per-coordinate gate can learn exactly that split: lean on mTAND
+              where the record is dense, lean on the fill where it is sparse.
+              And the choice is not only about accuracy. If the task is a
+              real-time alert then the mTAND branch is reading the future and
+              cannot be deployed as it stands, so the gate is also a place to
+              encode what the model is allowed to know.
+            </p>
+          </div>
+        </section>
+      </div>
+
+      <nav
+        class="mt-20 pt-8 border-t border-gray-200 dark:border-gray-800 flex justify-between text-sm"
+      >
+        <a
+          href="mtan_network.html"
+          class="text-muted hover:text-c3 transition-colors"
+          >&larr; 13 &nbsp;&middot;&nbsp; The mTAN Network</a
+        >
+        <a
+          href="building_mtan.html"
+          class="text-muted hover:text-c3 transition-colors"
+          >15 &nbsp;&middot;&nbsp; Building One &rarr;</a
+        >
+      </nav>
+    </article>
+  </body>
+</html>

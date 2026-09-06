@@ -1,0 +1,1925 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>The mTAN Network &mdash; Attention Over Time</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            fontFamily: {
+              sans: ["Inter", "system-ui", "sans-serif"],
+            },
+            colors: {
+              ink: "#000000",
+              surface: "#F7F8FA",
+              muted: "#5F6B75",
+              c1: "#000000",
+              c2: "#233D4D",
+              c3: "#FE7F2D",
+              c4: "#EAECF0",
+            },
+          },
+        },
+      };
+    </script>
+    <script src="../theme.js"></script>
+    <script>
+      window.MathJax = {
+        tex: {
+          inlineMath: [["$", "$"]],
+          displayMath: [["$$", "$$"]],
+        },
+      };
+    </script>
+    <script
+      id="MathJax-script"
+      async
+      src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"
+    ></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="../styles.css" />
+  </head>
+  <body
+    class="bg-surface text-ink font-sans antialiased dark:bg-[#0B1319] dark:text-gray-100"
+  >
+    <article class="max-w-3xl mx-auto px-6 py-20">
+      <a
+        href="../index.html"
+        class="text-sm text-muted hover:text-c3 transition-colors"
+        >&larr; Back to syllabus</a
+      >
+
+      <header class="mt-8 mb-16">
+        <p class="text-sm text-c3 font-medium uppercase tracking-widest mb-3">
+          13 &nbsp;&middot;&nbsp; Attention Over Time
+        </p>
+        <h1 class="text-4xl md:text-5xl font-bold leading-tight mb-4">
+          The mTAN Network
+        </h1>
+        <p class="text-lg text-muted leading-relaxed">
+          The same module run in both directions.
+        </p>
+      </header>
+
+      <div
+        class="space-y-12 text-gray-700 dark:text-gray-300 leading-relaxed text-[18px]"
+      >
+        <!-- ==================================================== 1 -->
+        <section>
+          <h2 class="text-2xl font-semibold text-ink dark:text-white mb-4">
+            Where we are
+          </h2>
+
+          <p>
+            Everything so far has been building towards a single paper.
+            <a
+              href="https://arxiv.org/abs/2101.10318"
+              class="text-c3 hover:text-c2 underline decoration-c3/40 underline-offset-2 transition-colors"
+              target="_blank"
+              >Multi-Time Attention Networks for Irregularly Sampled Time
+              Series</a
+            >, by Satya Narayan Shukla and Benjamin Marlin, presented at ICLR
+            2021, is the work that motivated this tutorial. It takes a mechanism
+            built so that a sentence could look at itself and turns it into a
+            way of reading time.
+          </p>
+
+          <p class="mt-4">Here is what has been already introduced.</p>
+
+          <ul class="mt-3 ml-6 space-y-2 list-disc">
+            <li>
+              A record that is three lists of different lengths with no shared
+              timestamps, written down formally in
+              <a
+                href="irregular_series.html"
+                class="text-c3 hover:text-c2 transition-colors"
+                >section 07</a
+              >.
+            </li>
+            <li>
+              A reason not to repair it into a rectangle, from
+              <a
+                href="repairs.html"
+                class="text-c3 hover:text-c2 transition-colors"
+                >section 08</a
+              >.
+            </li>
+            <li>
+              A learned embedding that turns any real time into a vector, from
+              <a
+                href="time_embedding.html"
+                class="text-c3 hover:text-c2 transition-colors"
+                >section 09</a
+              >.
+            </li>
+            <li>
+              An attention whose scores are built from time alone, which turns
+              out to be kernel regression with a learned kernel, from
+              <a
+                href="attention_as_interpolation.html"
+                class="text-c3 hover:text-c2 transition-colors"
+                >section 10</a
+              >.
+            </li>
+            <li>
+              A grid of reference points that we choose rather than read off the
+              data, from
+              <a
+                href="reference_points.html"
+                class="text-c3 hover:text-c2 transition-colors"
+                >section 11</a
+              >.
+            </li>
+            <li>
+              One softmax per channel and a mixing tensor, from
+              <a
+                href="missingness.html"
+                class="text-c3 hover:text-c2 transition-colors"
+                >section 12</a
+              >.
+            </li>
+          </ul>
+
+          <p class="mt-4">
+            This chapter puts them together into one architecture. What is new
+            is the assembly: the encoder, the decoder, the objective, and the
+            shape of every tensor that passes between them. mTAN is presented
+            here as
+            <b>an encoder for incomplete and multimodal series</b>. The decoder
+            gets a full section, because the architecture is not comprehensible
+            without it and because the symmetry between the two is the cleanest
+            way to hold the whole thing in mind. But the question the chapter is
+            answering is what you get when you put an irregular, partially
+            observed, possibly multimodal record in at one end and want a fixed
+            size representation out at the other.
+          </p>
+        </section>
+
+        <!-- ==================================================== 2 -->
+        <section>
+          <h2 class="text-2xl font-semibold text-ink dark:text-white mb-4">
+            The problem, stated once and properly
+          </h2>
+
+          <p>
+            A record has $D$ channels. Channel $d$ carries its own list of $L_d$
+            observations, each one a time and a value:
+          </p>
+
+          <div class="my-4 py-2 text-center overflow-x-auto">
+            $$\mathcal{S}_d = \big\{ (t_{i,d},\; x_{i,d}) \big\}_{i=1}^{L_d},
+            \qquad t_{1,d} &lt; t_{2,d} &lt; \cdots &lt; t_{L_d,\, d}, \qquad
+            \mathcal{S} = (\mathcal{S}_1, \dots, \mathcal{S}_D)$$
+          </div>
+
+          <p>
+            Both $t_{i,d}$ and $x_{i,d}$ are scalars. $\mathcal{S}_d$ is a set
+            of $L_d$ pairs and $\mathcal{S}$ is the whole record. This is
+            <a
+              href="irregular_series.html"
+              class="text-c3 hover:text-c2 transition-colors"
+              >section 07</a
+            >
+            unchanged.
+          </p>
+
+          <p class="mt-4">
+            Three things are true of this object and each of them breaks
+            something a standard model assumes.
+          </p>
+
+          <ol class="mt-3 ml-6 space-y-3 list-decimal">
+            <li>
+              <b>$L_d$ varies with $d$.</b> The patient example we have been
+              carrying all along has $D = 3$ with $L_1 \approx 2000$ pulse
+              readings, $L_2 = 11$ temperatures and $L_3 = 4$ lactates. There is
+              no single sequence length.
+            </li>
+            <li>
+              <b>The spacings $t_{i+1,d} - t_{i,d}$ are not constant.</b> Not
+              within a channel and not across channels. So an index is not a
+              clock, which is
+              <a
+                href="position_as_proxy.html"
+                class="text-c3 hover:text-c2 transition-colors"
+                >section 06</a
+              >.
+            </li>
+            <li>
+              <b>The channels are not aligned.</b> Pick an instant and at most
+              one channel has a reading there. There is no time at which a
+              complete $D$-vector exists.
+            </li>
+          </ol>
+
+          <p class="mt-4">
+            THe lack of channel alignment drives the most significant
+            architectural failure. We must define the exact mechanism behind
+            this breakdown. The assumption of non-alignment reflects the
+            practical reality of the data rather than an inviolable rule. That
+            is, sometimes two channels will register a shared timestamp and for
+            those cases the model should process this without issue. The problem
+            arises from the inability to guarantee alignment across the entire
+            record.
+            <span class="hl-c3"
+              >Any standard architecture that demands temporal alignment is
+              forced to synthetically produce it</span
+            >. That artificial manufacturing phase represents the exact
+            structural rejection in
+            <a
+              href="repairs.html"
+              class="text-c3 hover:text-c2 transition-colors"
+              >section 08</a
+            >.
+          </p>
+
+          <h3 class="text-xl font-semibold text-ink dark:text-white mt-8 mb-3">
+            The union grid and the mask
+          </h3>
+
+          <p>
+            An implementation cannot hold $D$ ragged lists in a tensor, so it
+            holds one padded time axis and a mask. Let
+          </p>
+
+          <div class="my-4 py-2 text-center overflow-x-auto">
+            $$\mathcal{T} = \bigcup_{d=1}^{D} \{\, t_{1,d}, \dots, t_{L_d,\,d}
+            \,\} = \{\, \tau_1 &lt; \tau_2 &lt; \cdots &lt; \tau_L \,\}$$
+          </div>
+
+          <p>
+            be the union of every observation time in the record, of size $L$,
+            and define the mask
+          </p>
+
+          <div class="my-4 py-2 text-center overflow-x-auto">
+            $$m_{\ell,d} = \begin{cases} 1, &amp; \text{if channel } d \text{
+            was measured at } \tau_\ell \\[4pt] 0, &amp; \text{otherwise}
+            \end{cases} \qquad M \in \{0,1\}^{L \times D}$$
+          </div>
+
+          <p>
+            with the value array $X \in \mathbb{R}^{L \times D}$ holding
+            $x_{i,d}$ wherever $m_{\ell,d} = 1$ and anything at all (zero, by
+            convention) wherever it is $0$. Note that $\sum_{\ell} m_{\ell,d} =
+            L_d$, so the mask carries exactly the per-channel counts. An
+            interesting part to highlight is that the equations don't actually
+            need $\mathcal{T}$ or $M$, the sums below all run over $i = 1,
+            \dots, L_d$ directly. The masks exist so that a GPU can do the work.
+          </p>
+
+          <p class="mt-4">
+            <b>The multimodal case is this case.</b> Replace "channel" with
+            "modality" and every word above still holds. Different modalities
+            arrive at different rates, for instance, a waveform at 500 Hz, a
+            laboratory result four times in two days, a clinical note once a
+            shift. They have different missingness patterns, including the
+            pattern where an entire modality is absent from a record, which is
+            just $L_d = 0$ for every column belonging to it. The one thing that
+            does not carry over automatically is that a modality need not be one
+            scalar per timestamp, and
+            <a
+              href="mtan_as_encoder.html#multimodal"
+              class="text-c3 hover:text-c2 transition-colors"
+              >later subsections</a
+            >
+            deals with that.
+          </p>
+        </section>
+
+        <!-- ==================================================== 3 -->
+        <section>
+          <h2 class="text-2xl font-semibold text-ink dark:text-white mb-4">
+            Learned time embeddings
+          </h2>
+
+          <p>
+            The module needs a way to turn a time into something comparable.
+            <a
+              href="time_embedding.html"
+              class="text-c3 hover:text-c2 transition-colors"
+              >Section 09</a
+            >
+            built one. The only thing this chapter adds is the head index, the
+            paper carries $H$ embedding functions at once, not one.
+          </p>
+
+          <div
+            class="my-3 py-3 px-2 text-center rounded-lg border border-c3/40 bg-c3/5"
+          >
+            $$\boldsymbol{\phi}_h(t)[m] = \begin{cases} \omega_{0,h}\, t +
+            \alpha_{0,h}, &amp; m = 0 \\[4pt] \sin\!\big(\omega_{m,h}\, t +
+            \alpha_{m,h}\big), &amp; 1 \leq m &lt; d_r \end{cases} \tag{E1}$$
+          </div>
+
+          <p>
+            In plain language this equation reads as follows: "coordinate $m$ of
+            head $h$'s embedding of the time $t$ is a sine of a learned
+            frequency and phase, except coordinate $0$, which is a straight line
+            in $t$".
+          </p>
+
+          <ul class="mt-3 ml-6 space-y-2 list-disc">
+            <li>
+              <b>In</b>: $t$, one scalar. <b>Out</b>: $\boldsymbol{\phi}_h(t)$,
+              a row vector of shape $1 \times d_r$, where $d_r$ is the embedding
+              width.
+            </li>
+            <li>
+              <b>Learned</b>: $\omega_{m,h}$ and $\alpha_{m,h}$ for $m = 0,
+              \dots, d_r - 1$ and $h = 1, \dots, H$. That is $2\,d_r\,H$
+              scalars.
+            </li>
+            <li>
+              The $d_r - 1$ periodic coordinates are bounded in $[-1, 1]$ and
+              say <em>where in a rhythm</em>. The one linear coordinate is
+              unbounded and says <em>how far through</em>.
+            </li>
+          </ul>
+
+          <p class="mt-4">
+            The reason a purely periodic basis is not enough is the argument
+            from
+            <a
+              href="time_embedding.html"
+              class="text-c3 hover:text-c2 transition-colors"
+              >section 09</a
+            >.
+          </p>
+
+          <p class="mt-4">
+            <b>Each head has its own embedding function.</b> That is what
+            equation (E1) says, with $h$ on both $\omega$ and $\alpha$. It
+            matters because the frequencies are what a head's notion of
+            closeness is built out of, so giving each head its own frequencies
+            is what lets one head care about the last twenty minutes while
+            another cares about the whole stay, which is the picture in
+            <a
+              href="missingness.html"
+              class="text-c3 hover:text-c2 transition-colors"
+              >section 12</a
+            >.
+          </p>
+
+          <div class="panel-c4 rounded-lg p-5 mt-6 text-[16px]">
+            <p class="font-medium text-ink dark:text-white mb-2">
+              One observation on (E1)
+            </p>
+            <p>
+              The released implementation does not build $H$ separate
+              embeddings. It builds one $d_r$-wide embedding, projects it once,
+              and splits the projection into $H$ slices of width $d_r/H$, which
+              is ordinary multi-head attention. So in the code the heads share
+              $\omega$ and $\alpha$ and differ only in which slice of the
+              projection they get.
+            </p>
+          </div>
+        </section>
+
+        <!-- ==================================================== 4 -->
+        <section>
+          <h2 class="text-2xl font-semibold text-ink dark:text-white mb-4">
+            The mTAND module in full
+          </h2>
+
+          <h3 class="text-xl font-semibold text-ink dark:text-white mt-8 mb-3">
+            Reference points
+          </h3>
+
+          <p>
+            Fix a list of $K$ times we intend to ask about, $\mathbf{r} =
+            [\,r_1, \dots, r_K\,]$, a row vector of shape $1 \times K$. These
+            are the <b>reference points</b> of
+            <a
+              href="reference_points.html"
+              class="text-c3 hover:text-c2 transition-colors"
+              >section 11</a
+            >. Two standard choices: an evenly spaced grid over the observation
+            window, which is what the paper uses for classification with $K =
+            128$; or $\rho(\mathcal{S})$, the union $\mathcal{T}$ of every time
+            at which any channel was observed, which makes the grid adapt to the
+            record.
+          </p>
+
+          <p class="mt-4">
+            A fixed reference grid is what
+            <span class="hl-c3"
+              >converts an irregular problem into a regular one</span
+            >. Meaning that the output length of an attention layer is set by
+            the number of <em>queries</em>, not by the number of keys. When we
+            choose the queries and we are choosing the output shape. That single
+            fact is why a patient with 2000 readings and a patient with 30 leave
+            this module in exactly the same shape.
+          </p>
+
+          <h3 class="text-xl font-semibold text-ink dark:text-white mt-8 mb-3">
+            The attention, and what the query, key and value are
+          </h3>
+
+          <p>
+            For a head $h$ and a channel $d$, project the embedded query time
+            and the embedded observation time:
+          </p>
+
+          <div class="my-4 py-2 text-center">
+            $$\mathbf{q}_h(t) = \boldsymbol{\phi}_h(t)\, W_q^{h}, \qquad
+            \mathbf{k}_h(t_{i,d}) = \boldsymbol{\phi}_h(t_{i,d})\, W_k^{h}
+            \tag{E2}$$
+          </div>
+
+          <p>
+            with $W_q^{h}, W_k^{h} \in \mathbb{R}^{d_r \times d_k}$ and $d_k
+            \leq d_r$, so both $\mathbf{q}_h(t)$ and $\mathbf{k}_h(t_{i,d})$
+            have shape $1 \times d_k$. Scoring them yields:
+          </p>
+
+          <div class="my-4 py-2 text-center">
+            $$e_{h,d}\big(t,\, t_{i,d}\big) = \frac{\mathbf{q}_h(t)\,
+            \mathbf{k}_h(t_{i,d})^{\top}}{\sqrt{d_k}} =
+            \frac{\boldsymbol{\phi}_h(t)\, W_q^{h}\, W_k^{h\top}\,
+            \boldsymbol{\phi}_h(t_{i,d})^{\top}} {\sqrt{d_k}} \tag{E3}$$
+          </div>
+
+          <p>
+            One scalar per $(h, d, i, t)$. The chain of shapes is $(1 \times
+            d_r)(d_r \times d_k)(d_k \times d_r)(d_r \times 1)$, which is $1
+            \times 1$. The $\sqrt{d_k}$ is the usual scaling from
+            <a
+              href="attention_as_interpolation.html"
+              class="text-c3 hover:text-c2 transition-colors"
+              >section 10</a
+            >.
+          </p>
+
+          <div class="panel-c4 rounded-lg p-5 mt-6 text-[16px]">
+            <p class="font-medium text-ink dark:text-white mb-2">
+              This is not the usual query, key, value triple
+            </p>
+            <ul class="ml-5 space-y-2 list-disc">
+              <li>
+                The <b>query</b> is $\boldsymbol{\phi}_h(t)W_q^{h}$, built from
+                a time <span class="hl-c3">we chose</span>. It does not come
+                from the data at all.
+              </li>
+              <li>
+                The <b>key</b> is $\boldsymbol{\phi}_h(t_{i,d})W_k^{h}$, built
+                from <span class="hl-c3">when</span> an observation happened and
+                from nothing else.
+              </li>
+              <li>
+                The <b>value</b> is $x_{i,d}$. The measurement itself. A raw
+                scalar in the units of the data. There is no $W_v$ and there is
+                no projection. This is the real departure from usual attention,
+                where the key and the value are two projections of one token, so
+                what a token says helps decide how much of it gets read. Here
+                they come from two different objects, the timestamp and the
+                reading, and only the timestamp is allowed near the score.
+              </li>
+            </ul>
+          </div>
+
+          <h3 class="text-xl font-semibold text-ink dark:text-white mt-8 mb-3">
+            The masked normalisation
+          </h3>
+
+          <p>
+            As we have introduced before, normalise the scores over the
+            observations that channel $d$ actually has, and read off a weighted
+            average of what was measured:
+          </p>
+
+          <div class="my-4 py-2 text-center">
+            $$\kappa_{h,d}\big(t,\, t_{i,d}\big) = \frac{\exp e_{h,d}(t,\,
+            t_{i,d})}{\displaystyle\sum_{i'=1}^{L_d} \exp e_{h,d}(t,\,
+            t_{i',d})} \tag{E4}$$
+          </div>
+
+          <div class="my-4 py-2 text-center">
+            $$\hat{x}_{h,d}(t) = \sum_{i=1}^{L_d} \kappa_{h,d}\big(t,\,
+            t_{i,d}\big)\, x_{i,d} \tag{E5}$$
+          </div>
+
+          <p>
+            Every variable in the equations above is a scalar. The entire
+            masking mechanism is encapsulated within the upper limit of those
+            two sums. The limit is specifically $L_d$ rather than a global $L$.
+            Because the summation iterates exclusively over one channel's own
+            recorded observations,
+            <span class="hl-c3"
+              >the system never queries a channel at a time when no measurement
+              occurred</span
+            >. As a consequence, the model does not actually requires data
+            imputation. This mechenism represents the argument of
+
+            <ahref
+              ="missingness.html"
+              class="text-c3 hover:text-c2 transition-colors"
+              >section 12</ahref
+            >, and it serves as the architectural solution for missingness.
+          </p>
+
+          <p class="mt-4">
+            In the dense form, with the union grid and the mask introduced
+            above, the same thing is written as
+          </p>
+
+          <div class="my-4 py-2 text-center">
+            $$\kappa_{h,d}\big(t,\, \tau_\ell\big) = \frac{m_{\ell,d} \exp
+            e_{h,d}(t,\, \tau_\ell)}{\displaystyle\sum_{\ell'=1}^{L} m_{\ell',d}
+            \exp e_{h,d}(t,\, \tau_{\ell'})} \tag{E4$'$}$$
+          </div>
+
+          <p>
+            which is what an implementation computes by adding a large negative
+            number (e.g., in pytorch
+            <code>attention_scores.masked_fill(mask, float('-inf')))</code>) to
+            the masked logits before the softmax rather than by multiplying
+            after it.
+          </p>
+
+          <h3 class="text-xl font-semibold text-ink dark:text-white mt-8 mb-3">
+            Heads, and what varies across them
+          </h3>
+
+          <p>
+            Everything from (E1) to (E5) is repeated for $h = 1, \dots, H$. What
+            varies across heads is the embedding parameters $\omega_{m,h},
+            \alpha_{m,h}$ and the projections $W_q^{h}, W_k^{h}$.
+          </p>
+          <p class="mt-4">
+            What does <em>not</em> vary: the values $x_{i,d}$, the observation
+            times, the mask, and the reference grid.
+            <span class="hl-c3"
+              >A head is a different opinion about which times are close to
+              which, applied to the same evidence</span
+            >.
+          </p>
+
+          <h3 class="text-xl font-semibold text-ink dark:text-white mt-8 mb-3">
+            Folding the head and channel axes
+          </h3>
+
+          <p>
+            After (E5) we hold $H \times D$ scalars for each query time. The
+            last step mixes them into $J$ numbers:
+          </p>
+
+          <div
+            class="my-3 py-3 px-2 text-center rounded-lg border border-c3/40 bg-c3/5"
+          >
+            $$\operatorname{mTAN}(t,\, \mathcal{S})[j] = \sum_{h=1}^{H}
+            \sum_{d=1}^{D} \hat{x}_{h,d}(t)\, U_{h,d,j} \tag{E6}$$
+          </div>
+
+          <p>
+            with $U \in \mathbb{R}^{H \times D \times J}$. Read as a matrix
+            multiplication, flatten the $(h,d)$ pair into one axis of length
+            $HD$ and (E6) is a row vector of length $HD$ times an $HD \times J$
+            matrix, giving a row vector of length $J$. This is the $U$ of
+            <a
+              href="missingness.html"
+              class="text-c3 hover:text-c2 transition-colors"
+              >section 12</a
+            >, and it is
+            <b
+              >the only place in the module where different channels are
+              combined</b
+            >.
+          </p>
+
+          <p class="mt-4">
+            Evaluate (E6) at each reference point and stack the results:
+          </p>
+
+          <div class="my-4 py-2 text-center overflow-x-auto">
+            $$\begin{aligned} \operatorname{mTAND}(\mathbf{r},\,
+            \mathcal{S})[k,:] &\;=\; \operatorname{mTAN}(r_k,\, \mathcal{S})
+            \;\in\; \mathbb{R}^{1 \times J} \\[4pt]
+            \operatorname{mTAND}(\mathbf{r},\, \mathcal{S}) &\;\in\;
+            \mathbb{R}^{K \times J} \end{aligned} \tag{E7}$$
+          </div>
+
+          <div class="panel-c4 rounded-lg p-5 mt-6 text-[16px]">
+            <p class="font-medium text-ink dark:text-white mb-2">
+              Where the D in mTAND comes from
+            </p>
+            <p>
+              $\operatorname{mTAN}(t, \mathcal{S})$ is a function of one query
+              time. We hand it a single instant and it hands back $J$ numbers,
+              and it will do that for any real $t$, so it is a continuous object
+              with no shape and no length. Nothing built out of matrices can
+              consume it.
+            </p>
+            <p class="mt-3">
+              $\operatorname{mTAND}$ is that same function
+              <b>discretised</b>: evaluated at the finite list $\mathbf{r}$ and
+              stacked into an array. That is the whole of the difference, and
+              the <b>D</b> stands for <b>discretised</b>. It is a materialised
+              mTAN, not a different mechanism.
+            </p>
+            <p class="mt-3">
+              Pay attention: the $D$ in mTAND has nothing to do with $D$, the
+              number of channels, which appears two equations earlier in (E6)
+              and never leaves. One is a word, the other is a count.
+            </p>
+          </div>
+
+          <p class="mt-4">
+            One shape calcualtion example for $D = 3$, $H = 4$, $K = 128$:
+          </p>
+
+          <div class="my-6 overflow-x-auto">
+            <table class="w-full text-[15px]">
+              <thead>
+                <tr
+                  class="text-left text-muted border-b border-gray-200 dark:border-gray-800"
+                >
+                  <th class="py-2 font-medium">after</th>
+                  <th class="py-2 font-medium">object</th>
+                  <th class="py-2 font-medium">shape</th>
+                  <th class="py-2 font-medium">example</th>
+                </tr>
+              </thead>
+              <tbody class="text-gray-700 dark:text-gray-300 align-top">
+                <tr class="border-b border-gray-100 dark:border-gray-800/60">
+                  <td class="py-2">input</td>
+                  <td class="py-2">$X$, $M$ on the union grid</td>
+                  <td class="py-2">$L \times D$ each</td>
+                  <td class="py-2">$2015 \times 3$</td>
+                </tr>
+                <tr class="border-b border-gray-100 dark:border-gray-800/60">
+                  <td class="py-2">(E1)</td>
+                  <td class="py-2">queries embedded</td>
+                  <td class="py-2">$H \times K \times d_r$</td>
+                  <td class="py-2">$4 \times 128 \times 128$</td>
+                </tr>
+                <tr class="border-b border-gray-100 dark:border-gray-800/60">
+                  <td class="py-2">(E1)</td>
+                  <td class="py-2">keys embedded</td>
+                  <td class="py-2">$H \times L \times d_r$</td>
+                  <td class="py-2">$4 \times 2015 \times 128$</td>
+                </tr>
+                <tr class="border-b border-gray-100 dark:border-gray-800/60">
+                  <td class="py-2">(E2)</td>
+                  <td class="py-2">projected queries and keys</td>
+                  <td class="py-2">
+                    $H \times K \times d_k$, $H \times L \times d_k$
+                  </td>
+                  <td class="py-2">$d_k = 32$</td>
+                </tr>
+                <tr class="border-b border-gray-100 dark:border-gray-800/60">
+                  <td class="py-2">(E3)</td>
+                  <td class="py-2">logits</td>
+                  <td class="py-2">$H \times K \times L$</td>
+                  <td class="py-2">$4 \times 128 \times 2015$</td>
+                </tr>
+                <tr class="border-b border-gray-100 dark:border-gray-800/60">
+                  <td class="py-2">(E4)</td>
+                  <td class="py-2">weights, one distribution per $(h,k,d)$</td>
+                  <td class="py-2">$H \times K \times L \times D$</td>
+                  <td class="py-2">$4 \times 128 \times 2015 \times 3$</td>
+                </tr>
+                <tr class="border-b border-gray-100 dark:border-gray-800/60">
+                  <td class="py-2">(E5)</td>
+                  <td class="py-2">$\hat{x}_{h,d}(r_k)$</td>
+                  <td class="py-2">$K \times H \times D$</td>
+                  <td class="py-2">$128 \times 4 \times 3$</td>
+                </tr>
+                <tr class="border-b border-gray-100 dark:border-gray-800/60">
+                  <td class="py-2">fold</td>
+                  <td class="py-2">$(h,d)$ flattened</td>
+                  <td class="py-2">$K \times HD$</td>
+                  <td class="py-2">$128 \times 12$</td>
+                </tr>
+                <tr>
+                  <td class="py-2">(E6), (E7)</td>
+                  <td class="py-2">
+                    $\operatorname{mTAND}(\mathbf{r}, \mathcal{S})$
+                  </td>
+                  <td class="py-2">$K \times J$</td>
+                  <td class="py-2">$128 \times 64$</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          <p>
+            The weight tensor at (E4) is the big one, and the reason is that the
+            $L$ axis is the union of every channel's times while the softmax is
+            per channel, so the same $H \times K \times L$ block of logits is
+            reused $D$ times under $D$ different masks. That is a memory cost
+            paid to make the whole thing one matrix multiplication.
+          </p>
+
+          <h3 class="text-xl font-semibold text-ink dark:text-white mt-8 mb-3">
+            <u>Example</u>: one reference point, one channel, one head
+          </h3>
+
+          <p>
+            Let's walk through one example. Take the lactate channel, $d = 3$,
+            with its four readings at minutes 15, 380, 1120 and 2650 carrying
+            values $2.4$, $3.1$, $4.6$ and $2.8$. Take the reference point $r_2
+            = 720$ (hour 12) and the head $h = 1$. Then $L_3 = 4$ and the
+            computation is nine numbers long.
+          </p>
+
+          <ol class="mt-3 ml-6 space-y-3 list-decimal">
+            <li>
+              Embed the query time $\boldsymbol{\phi}_1(720) \in \mathbb{R}^{1
+              \times d_r}$ and project it $\mathbf{q}_1(720) =
+              \boldsymbol{\phi}_1(720)W_q^{1} \in \mathbb{R}^{1 \times d_k}$.
+            </li>
+            <li>
+              Embed and project the four observation times, giving four keys
+              $\mathbf{k}_1(15)$, $\mathbf{k}_1(380)$, $\mathbf{k}_1(1120)$,
+              $\mathbf{k}_1(2650)$, each $1 \times d_k$. The lactate
+              <em>values</em> play no part in this step and never will.
+            </li>
+            <li>
+              Four dot products, scaled. Suppose they come out as
+              <div class="overflow-x-auto">
+                $$\begin{aligned} e_{1,3}(720,\, 15) &= 0.29, &\qquad
+                e_{1,3}(720,\, 380) &= 1.40, \\[2pt] e_{1,3}(720,\, 1120) &=
+                0.61, &\qquad e_{1,3}(720,\, 2650) &= -1.91 \end{aligned}$$
+              </div>
+            </li>
+            <li>
+              Exponentiate: $1.336$, $4.055$, $1.840$, $0.148$. Sum: $7.380$.
+              Divide:
+              <div class="overflow-x-auto">
+                $$\kappa_{1,3}(720, \cdot) = (0.18,\; 0.55,\; 0.25,\; 0.02)$$
+              </div>
+              which sums to $1$ by construction.
+            </li>
+            <li>
+              Weighted average of the four measurements:
+              <div class="overflow-x-auto">
+                $$\hat{x}_{1,3}(720) = 0.18(2.4) + 0.55(3.1) + 0.25(4.6) +
+                0.02(2.8) = 3.34$$
+              </div>
+            </li>
+          </ol>
+
+          <p class="mt-4">
+            That is one of the $H \times D = 12$ scalars that reference point
+            $r_2$ produces. The other eleven are the same five steps with a
+            different $h$, a different $d$, or both. Equation (E6) then turns
+            those twelve numbers into $J = 64$ numbers, and $r_2$ is finished.
+          </p>
+
+          <p class="mt-4">
+            Notice what $3.34$ is. It lies between $2.4$ and $4.6$, and it has
+            to, because a convex combination of the four measurements cannot
+            leave their range.
+            <span class="hl-c3"
+              >The module interpolates and it does not extrapolate beyond the
+              values it was given</span
+            >, however far in time we ask.
+          </p>
+
+          <h3 class="text-xl font-semibold text-ink dark:text-white mt-8 mb-3">
+            <u>Another example</u>: two channels, five reference points
+          </h3>
+
+          <p>
+            Now the same thing at a larger scale with two channels with
+            deliberately different observation patterns, and put $K = 5$
+            reference points on the hour marks $0$, $12$, $24$, $36$, $48$.
+          </p>
+
+          <ul class="mt-3 ml-6 space-y-2 list-disc">
+            <li>
+              <b>Channel 1, lactate.</b> $L_1 = 4$, at hours $0.25$, $6.3$,
+              $18.7$, $44.2$, values $2.4$, $3.1$, $4.6$, $2.8$. Sparse and
+              spread across the whole stay.
+            </li>
+            <li>
+              <b>Channel 2, temperature.</b> $L_2 = 5$, at hours $1$, $5$, $9$,
+              $21$, $26$, values $37.1$, $37.4$, $38.2$, $38.9$, $39.4$.
+              Clustered early, and then nothing at all for the last 22 hours.
+            </li>
+          </ul>
+
+          <p class="mt-4">
+            The two attention weight matrices are $5 \times 4$ and $5 \times 5$.
+            They have different widths, they are never compared to one another,
+            and each row of each of them sums to one. The numbers below are
+            illustrative, chosen to show the shape a trained kernel takes rather
+            than read off a trained model, but the row sums and the qualitative
+            structure are the real thing.
+          </p>
+
+          <div class="my-6 overflow-x-auto">
+            <p class="text-sm text-muted mb-2">
+              $\kappa_{h,1}(r_k, \cdot)$, lactate, one row per reference point
+            </p>
+            <table class="w-full text-[15px]">
+              <thead>
+                <tr
+                  class="text-left text-muted border-b border-gray-200 dark:border-gray-800"
+                >
+                  <th class="py-2 font-medium">$r_k$</th>
+                  <th class="py-2 font-medium">0.25 h</th>
+                  <th class="py-2 font-medium">6.3 h</th>
+                  <th class="py-2 font-medium">18.7 h</th>
+                  <th class="py-2 font-medium">44.2 h</th>
+                  <th class="py-2 font-medium">$\hat{x}_{h,1}(r_k)$</th>
+                </tr>
+              </thead>
+              <tbody class="text-gray-700 dark:text-gray-300">
+                <tr class="border-b border-gray-100 dark:border-gray-800/60">
+                  <td class="py-2">0 h</td>
+                  <td class="py-2"><span class="hl-c3">0.82</span></td>
+                  <td class="py-2">0.14</td>
+                  <td class="py-2">0.03</td>
+                  <td class="py-2">0.01</td>
+                  <td class="py-2">2.57</td>
+                </tr>
+                <tr class="border-b border-gray-100 dark:border-gray-800/60">
+                  <td class="py-2">12 h</td>
+                  <td class="py-2">0.18</td>
+                  <td class="py-2"><span class="hl-c3">0.55</span></td>
+                  <td class="py-2">0.25</td>
+                  <td class="py-2">0.02</td>
+                  <td class="py-2">3.34</td>
+                </tr>
+                <tr class="border-b border-gray-100 dark:border-gray-800/60">
+                  <td class="py-2">24 h</td>
+                  <td class="py-2">0.04</td>
+                  <td class="py-2">0.22</td>
+                  <td class="py-2"><span class="hl-c3">0.68</span></td>
+                  <td class="py-2">0.06</td>
+                  <td class="py-2">4.07</td>
+                </tr>
+                <tr class="border-b border-gray-100 dark:border-gray-800/60">
+                  <td class="py-2">36 h</td>
+                  <td class="py-2">0.02</td>
+                  <td class="py-2">0.07</td>
+                  <td class="py-2"><span class="hl-c3">0.55</span></td>
+                  <td class="py-2">0.36</td>
+                  <td class="py-2">3.80</td>
+                </tr>
+                <tr>
+                  <td class="py-2">48 h</td>
+                  <td class="py-2">0.01</td>
+                  <td class="py-2">0.03</td>
+                  <td class="py-2">0.19</td>
+                  <td class="py-2"><span class="hl-c3">0.77</span></td>
+                  <td class="py-2">3.15</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          <div class="my-6 overflow-x-auto">
+            <p class="text-sm text-muted mb-2">
+              $\kappa_{h,2}(r_k, \cdot)$, temperature, same five reference
+              points
+            </p>
+            <table class="w-full text-[15px]">
+              <thead>
+                <tr
+                  class="text-left text-muted border-b border-gray-200 dark:border-gray-800"
+                >
+                  <th class="py-2 font-medium">$r_k$</th>
+                  <th class="py-2 font-medium">1 h</th>
+                  <th class="py-2 font-medium">5 h</th>
+                  <th class="py-2 font-medium">9 h</th>
+                  <th class="py-2 font-medium">21 h</th>
+                  <th class="py-2 font-medium">26 h</th>
+                  <th class="py-2 font-medium">$\hat{x}_{h,2}(r_k)$</th>
+                </tr>
+              </thead>
+              <tbody class="text-gray-700 dark:text-gray-300">
+                <tr class="border-b border-gray-100 dark:border-gray-800/60">
+                  <td class="py-2">0 h</td>
+                  <td class="py-2"><span class="hl-c3">0.61</span></td>
+                  <td class="py-2">0.28</td>
+                  <td class="py-2">0.09</td>
+                  <td class="py-2">0.02</td>
+                  <td class="py-2">0.00</td>
+                  <td class="py-2">37.32</td>
+                </tr>
+                <tr class="border-b border-gray-100 dark:border-gray-800/60">
+                  <td class="py-2">12 h</td>
+                  <td class="py-2">0.06</td>
+                  <td class="py-2">0.20</td>
+                  <td class="py-2"><span class="hl-c3">0.44</span></td>
+                  <td class="py-2">0.26</td>
+                  <td class="py-2">0.04</td>
+                  <td class="py-2">38.20</td>
+                </tr>
+                <tr class="border-b border-gray-100 dark:border-gray-800/60">
+                  <td class="py-2">24 h</td>
+                  <td class="py-2">0.01</td>
+                  <td class="py-2">0.03</td>
+                  <td class="py-2">0.10</td>
+                  <td class="py-2"><span class="hl-c3">0.49</span></td>
+                  <td class="py-2">0.37</td>
+                  <td class="py-2">38.95</td>
+                </tr>
+                <tr class="border-b border-gray-100 dark:border-gray-800/60">
+                  <td class="py-2">36 h</td>
+                  <td class="py-2">0.01</td>
+                  <td class="py-2">0.02</td>
+                  <td class="py-2">0.06</td>
+                  <td class="py-2">0.35</td>
+                  <td class="py-2"><span class="hl-c3">0.56</span></td>
+                  <td class="py-2">39.09</td>
+                </tr>
+                <tr>
+                  <td class="py-2">48 h</td>
+                  <td class="py-2">0.01</td>
+                  <td class="py-2">0.02</td>
+                  <td class="py-2">0.05</td>
+                  <td class="py-2">0.31</td>
+                  <td class="py-2"><span class="hl-c3">0.61</span></td>
+                  <td class="py-2">39.12</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          <p>Four things to read off those two tables.</p>
+
+          <ol class="mt-3 ml-6 space-y-3 list-decimal">
+            <li>
+              <b
+                >The attention mass naturally follows the queries along the
+                diagonal.</b
+              >
+              Each reference point correctly assigns the
+              <em
+                >highest weight to the measurements closest to its own
+                timestamp</em
+              >. No explicit rule enforced this structure, this happens entirely
+              from the learned frequencies.
+            </li>
+            <li>
+              <b>The two matrices have different widths and never meet.</b> No
+              step required the lactate at 6.3 hours and the temperature at 5
+              hours to be reconciled, aligned, binned or filled. They are
+              combined for the first time at (E6), after both have been resolved
+              onto the same five reference points.
+            </li>
+            <li>
+              <b>Nothing was invented.</b> Every entry in the last column is a
+              convex combination of numbers a clinician wrote down. Compare the
+              $48 \times 3$ matrix of
+              <a
+                href="repairs.html"
+                class="text-c3 hover:text-c2 transition-colors"
+                >section 08</a
+              >, of which 44 lactate cells were copies.
+            </li>
+            <li>
+              <b>And here is the failure.</b> Look at the temperature rows for
+              36 hours and 48 hours: $39.09$ and $39.12$. Twelve hours apart,
+              and practically the same answer, because after hour 26 there is
+              nothing left to attend to and the softmax has nowhere else to put
+              its mass. The output is a confident number with no attached
+              warning that it was reached across a 22 hour gap.
+            </li>
+          </ol>
+        </section>
+
+        <!-- ==================================================== SVG B -->
+        <section>
+          <h2 class="text-2xl font-semibold text-ink dark:text-white mb-4">
+            The module, drawn
+          </h2>
+
+          <p>
+            Every arrow carries the shape of what flows along it, and every
+            block carries the equation it implements.
+          </p>
+
+          <figure class="my-10">
+            <svg
+              class="mtan-fig w-full"
+              viewBox="0 0 720 660"
+              role="img"
+              aria-labelledby="figB-title figB-desc"
+            >
+              <title id="figB-title">The mTAND module, expanded</title>
+              <desc id="figB-desc">
+                The query time is embedded by the per head time embedding and
+                projected by W q to give a query of width d k. Each observation
+                time is embedded by the same head's embedding and projected by W
+                k to give a key. Their scaled dot product is a logit of shape H
+                by K by L. The mask is added to the logits before a softmax
+                taken over the key axis and applied separately for each channel,
+                giving weights of shape H by K by L by D. Those weights gather
+                the raw measured values, not projections of them, into H by D
+                scalars per reference point. Those are flattened and multiplied
+                by the mixing tensor U to give the K by J output.
+              </desc>
+
+              <style>
+                .mtan-fig {
+                  --ink: #111827;
+                  --muted: #5f6b75;
+                  --c2: #233d4d;
+                  --c3: #fe7f2d;
+                  --panel: #eaecf0;
+                  --panelstroke: rgba(35, 61, 77, 0.35);
+                  --line: #233d4d;
+                  --faint: rgba(35, 61, 77, 0.12);
+                  font-family: Inter, system-ui, sans-serif;
+                }
+                .dark .mtan-fig {
+                  --ink: #e5e7eb;
+                  --muted: #9aa6b2;
+                  --c2: #7aa8c4;
+                  --c3: #fe7f2d;
+                  --panel: rgba(234, 236, 240, 0.07);
+                  --panelstroke: rgba(254, 127, 45, 0.3);
+                  --line: #7aa8c4;
+                  --faint: rgba(234, 236, 240, 0.1);
+                }
+                .mtan-fig .bx {
+                  fill: var(--panel);
+                  stroke: var(--panelstroke);
+                  stroke-width: 1;
+                }
+                .mtan-fig .bx-op {
+                  fill: none;
+                  stroke: var(--c3);
+                  stroke-width: 1.4;
+                }
+                .mtan-fig .bx-q {
+                  fill: none;
+                  stroke: var(--ink);
+                  stroke-width: 1.2;
+                }
+                .mtan-fig .bx-k {
+                  fill: none;
+                  stroke: var(--c2);
+                  stroke-width: 1.2;
+                }
+                .mtan-fig .ln {
+                  fill: none;
+                  stroke: var(--line);
+                  stroke-width: 1.1;
+                }
+                .mtan-fig .ln-q {
+                  fill: none;
+                  stroke: var(--ink);
+                  stroke-width: 1.1;
+                }
+                .mtan-fig .ln-v {
+                  fill: none;
+                  stroke: var(--c3);
+                  stroke-width: 1.4;
+                }
+                .mtan-fig .dash {
+                  stroke-dasharray: 4 3;
+                }
+                .mtan-fig text {
+                  fill: var(--ink);
+                }
+                .mtan-fig .t-title {
+                  font-size: 12px;
+                  font-weight: 600;
+                }
+                .mtan-fig .t-lab {
+                  font-size: 11px;
+                }
+                .mtan-fig .t-sh {
+                  font-size: 9.5px;
+                  fill: var(--muted);
+                  font-style: italic;
+                }
+                .mtan-fig .t-tag {
+                  font-size: 9.5px;
+                  fill: var(--c3);
+                  font-weight: 600;
+                }
+                .mtan-fig .t-sec {
+                  font-size: 10px;
+                  fill: var(--muted);
+                  letter-spacing: 0.08em;
+                  text-transform: uppercase;
+                }
+                .mtan-fig .par {
+                  fill: var(--c3);
+                }
+              </style>
+
+              <defs>
+                <marker
+                  id="mtB-ar"
+                  viewBox="0 0 10 10"
+                  refX="9"
+                  refY="5"
+                  markerWidth="6"
+                  markerHeight="6"
+                  orient="auto-start-reverse"
+                >
+                  <path d="M 0 0 L 10 5 L 0 10 z" fill="var(--line)" />
+                </marker>
+                <marker
+                  id="mtB-arq"
+                  viewBox="0 0 10 10"
+                  refX="9"
+                  refY="5"
+                  markerWidth="6"
+                  markerHeight="6"
+                  orient="auto-start-reverse"
+                >
+                  <path d="M 0 0 L 10 5 L 0 10 z" fill="var(--ink)" />
+                </marker>
+                <marker
+                  id="mtB-arv"
+                  viewBox="0 0 10 10"
+                  refX="9"
+                  refY="5"
+                  markerWidth="6"
+                  markerHeight="6"
+                  orient="auto-start-reverse"
+                >
+                  <path d="M 0 0 L 10 5 L 0 10 z" fill="var(--c3)" />
+                </marker>
+              </defs>
+
+              <!-- ============ row 1: three sources ============ -->
+              <text class="t-sec" x="8" y="16">query side</text>
+              <text class="t-sec" x="258" y="16">key side</text>
+              <text class="t-sec" x="536" y="16">value side</text>
+
+              <!-- query source -->
+              <rect class="bx-q" x="8" y="26" width="200" height="42" rx="6" />
+              <text class="t-lab" x="18" y="44">
+                reference point r
+                <tspan dy="2.6" font-size="78%">k</tspan>
+              </text>
+              <text class="t-sh" x="18" y="59">
+                one scalar, k = 1..K, chosen by us
+              </text>
+
+              <!-- key source -->
+              <rect
+                class="bx-k"
+                x="258"
+                y="26"
+                width="222"
+                height="42"
+                rx="6"
+              />
+              <text class="t-lab" x="268" y="44">
+                observation time t
+                <tspan dy="2.6" font-size="78%">i,d</tspan>
+              </text>
+              <text class="t-sh" x="268" y="59">
+                L union times, per channel index set
+              </text>
+
+              <!-- value source -->
+              <rect
+                class="bx-op"
+                x="530"
+                y="26"
+                width="182"
+                height="42"
+                rx="6"
+              />
+              <text class="t-lab" x="540" y="44">
+                measured value x
+                <tspan dy="2.6" font-size="78%">i,d</tspan>
+              </text>
+              <text class="t-sh" x="540" y="59">
+                L &#215; D, raw, no projection
+              </text>
+
+              <!-- ============ row 2: embeddings ============ -->
+              <path
+                class="ln-q"
+                d="M108 68 L108 96"
+                marker-end="url(#mtB-arq)"
+              />
+              <text class="t-sh" x="113" y="86">1</text>
+              <path class="ln" d="M369 68 L369 96" marker-end="url(#mtB-ar)" />
+              <text class="t-sh" x="374" y="86">1</text>
+
+              <rect class="bx" x="8" y="96" width="200" height="46" rx="6" />
+              <circle class="par" cx="18" cy="106" r="3.2" />
+              <text class="t-title" x="27" y="110">
+                time embedding &#966;
+                <tspan dy="2.6" font-size="78%">h</tspan>
+              </text>
+              <text class="t-sh" x="27" y="124">
+                learned &#969;, &#945; per head
+              </text>
+              <text class="t-tag" x="180" y="137">E1</text>
+
+              <rect class="bx" x="258" y="96" width="222" height="46" rx="6" />
+              <circle class="par" cx="268" cy="106" r="3.2" />
+              <text class="t-title" x="277" y="110">
+                time embedding &#966;
+                <tspan dy="2.6" font-size="78%">h</tspan>
+              </text>
+              <text class="t-sh" x="277" y="124">
+                the same function, shared by every channel
+              </text>
+              <text class="t-tag" x="452" y="137">E1</text>
+
+              <!-- ============ row 3: projections ============ -->
+              <path
+                class="ln-q"
+                d="M108 142 L108 172"
+                marker-end="url(#mtB-arq)"
+              />
+              <text class="t-sh" x="113" y="161">
+                H &#215; K &#215; d
+                <tspan dy="2.6" font-size="78%">r</tspan>
+              </text>
+              <path
+                class="ln"
+                d="M369 142 L369 172"
+                marker-end="url(#mtB-ar)"
+              />
+              <text class="t-sh" x="374" y="161">
+                H &#215; L &#215; d
+                <tspan dy="2.6" font-size="78%">r</tspan>
+              </text>
+
+              <rect class="bx" x="8" y="172" width="200" height="40" rx="6" />
+              <circle class="par" cx="18" cy="182" r="3.2" />
+              <text class="t-title" x="27" y="187">
+                project by W
+                <tspan dy="2.6" font-size="78%">q</tspan>
+                <tspan dy="-6" font-size="78%">h</tspan>
+              </text>
+              <text class="t-sh" x="27" y="201">
+                d
+                <tspan dy="2.6" font-size="78%">r</tspan>
+                <tspan dy="-2.6">&#215; d</tspan>
+                <tspan dy="2.6" font-size="78%">k</tspan>
+              </text>
+              <text class="t-tag" x="180" y="207">E2</text>
+
+              <rect class="bx" x="258" y="172" width="222" height="40" rx="6" />
+              <circle class="par" cx="268" cy="182" r="3.2" />
+              <text class="t-title" x="277" y="187">
+                project by W
+                <tspan dy="2.6" font-size="78%">k</tspan>
+                <tspan dy="-6" font-size="78%">h</tspan>
+              </text>
+              <text class="t-sh" x="277" y="201">
+                d
+                <tspan dy="2.6" font-size="78%">r</tspan>
+                <tspan dy="-2.6">&#215; d</tspan>
+                <tspan dy="2.6" font-size="78%">k</tspan>
+              </text>
+              <text class="t-tag" x="452" y="207">E2</text>
+
+              <!-- ============ row 4: score ============ -->
+              <path
+                class="ln-q"
+                d="M108 212 L108 236 L296 236 L296 252"
+                marker-end="url(#mtB-arq)"
+              />
+              <text class="t-sh" x="113" y="231">
+                query, H &#215; K &#215; d
+                <tspan dy="2.6" font-size="78%">k</tspan>
+              </text>
+              <path
+                class="ln"
+                d="M369 212 L369 236 L344 236 L344 252"
+                marker-end="url(#mtB-ar)"
+              />
+              <text class="t-sh" x="376" y="231">
+                key, H &#215; L &#215; d
+                <tspan dy="2.6" font-size="78%">k</tspan>
+              </text>
+
+              <rect
+                class="bx-op"
+                x="200"
+                y="252"
+                width="240"
+                height="40"
+                rx="6"
+              />
+              <text class="t-title" x="210" y="270">
+                scaled dot product / &#8730;d
+                <tspan dy="2.6" font-size="78%">k</tspan>
+              </text>
+              <text class="t-sh" x="210" y="284">
+                the value never enters here
+              </text>
+              <text class="t-tag" x="412" y="288">E3</text>
+
+              <!-- mask -->
+              <rect class="bx" x="470" y="238" width="150" height="68" rx="6" />
+              <text class="t-title" x="480" y="254">mask M</text>
+              <text class="t-sh" x="480" y="267">L &#215; D, binary</text>
+              <g>
+                <rect x="480" y="274" width="11" height="11" fill="var(--c3)" />
+                <rect
+                  x="493"
+                  y="274"
+                  width="11"
+                  height="11"
+                  fill="var(--faint)"
+                />
+                <rect x="506" y="274" width="11" height="11" fill="var(--c3)" />
+                <rect
+                  x="519"
+                  y="274"
+                  width="11"
+                  height="11"
+                  fill="var(--faint)"
+                />
+                <rect
+                  x="532"
+                  y="274"
+                  width="11"
+                  height="11"
+                  fill="var(--faint)"
+                />
+                <rect
+                  x="480"
+                  y="288"
+                  width="11"
+                  height="11"
+                  fill="var(--faint)"
+                />
+                <rect x="493" y="288" width="11" height="11" fill="var(--c3)" />
+                <rect
+                  x="506"
+                  y="288"
+                  width="11"
+                  height="11"
+                  fill="var(--faint)"
+                />
+                <rect x="519" y="288" width="11" height="11" fill="var(--c3)" />
+                <rect x="532" y="288" width="11" height="11" fill="var(--c3)" />
+              </g>
+              <text class="t-sh" x="550" y="284">one column</text>
+              <text class="t-sh" x="550" y="296">per channel</text>
+
+              <!-- ============ row 5: masked softmax ============ -->
+              <path
+                class="ln"
+                d="M320 292 L320 322"
+                marker-end="url(#mtB-ar)"
+              />
+              <text class="t-sh" text-anchor="end" x="313" y="311">
+                logits, H &#215; K &#215; L
+              </text>
+              <path
+                class="ln dash"
+                d="M470 300 L400 300 L400 322"
+                marker-end="url(#mtB-ar)"
+              />
+              <text class="t-sh" x="406" y="315">add -inf where 0</text>
+
+              <rect
+                class="bx-op"
+                x="180"
+                y="322"
+                width="300"
+                height="46"
+                rx="6"
+              />
+              <text class="t-title" x="190" y="340">
+                softmax over the key axis, once per channel
+              </text>
+              <text class="t-sh" x="190" y="355">
+                D separate distributions, each summing to 1
+              </text>
+              <text class="t-tag" x="452" y="363">E4</text>
+
+              <!-- ============ row 6: gather ============ -->
+              <path
+                class="ln"
+                d="M330 368 L330 400"
+                marker-end="url(#mtB-ar)"
+              />
+              <text class="t-sh" x="335" y="388">
+                weights, H &#215; K &#215; L &#215; D
+              </text>
+              <path
+                class="ln-v"
+                d="M660 68 L660 412 L500 412"
+                marker-end="url(#mtB-arv)"
+              />
+              <text class="t-sh" x="666" y="152">values</text>
+              <text class="t-sh" x="666" y="164">travel</text>
+              <text class="t-sh" x="666" y="176">straight</text>
+              <text class="t-sh" x="666" y="188">down,</text>
+              <text class="t-sh" x="666" y="200">never</text>
+              <text class="t-sh" x="666" y="212">projected</text>
+
+              <rect
+                class="bx-op"
+                x="180"
+                y="400"
+                width="320"
+                height="46"
+                rx="6"
+              />
+              <text class="t-title" x="190" y="418">
+                weighted sum of the measurements
+              </text>
+              <text class="t-sh" x="190" y="433">
+                x&#770;
+                <tspan dy="2.6" font-size="78%">h,d</tspan>
+                <tspan dy="-2.6">(r</tspan>
+                <tspan dy="2.6" font-size="78%">k</tspan>
+                <tspan dy="-2.6">), one scalar per head and channel</tspan>
+              </text>
+              <text class="t-tag" x="472" y="441">E5</text>
+
+              <!-- ============ row 7: fold + U ============ -->
+              <path
+                class="ln"
+                d="M340 446 L340 478"
+                marker-end="url(#mtB-ar)"
+              />
+              <text class="t-sh" x="345" y="466">K &#215; H &#215; D</text>
+
+              <rect class="bx" x="180" y="478" width="150" height="40" rx="6" />
+              <text class="t-title" x="190" y="496">flatten (h, d)</text>
+              <text class="t-sh" x="190" y="510">K &#215; HD</text>
+
+              <path
+                class="ln"
+                d="M330 498 L378 498"
+                marker-end="url(#mtB-ar)"
+              />
+
+              <rect class="bx" x="378" y="478" width="180" height="40" rx="6" />
+              <circle class="par" cx="388" cy="488" r="3.2" />
+              <text class="t-title" x="397" y="496">mix by U</text>
+              <text class="t-sh" x="397" y="510">HD &#215; J</text>
+              <text class="t-tag" x="532" y="514">E6</text>
+
+              <path
+                class="ln"
+                d="M468 518 L468 548"
+                marker-end="url(#mtB-ar)"
+              />
+              <text class="t-sh" x="473" y="537">K x J</text>
+
+              <rect
+                class="bx-op"
+                x="330"
+                y="548"
+                width="270"
+                height="42"
+                rx="6"
+              />
+              <text class="t-title" x="340" y="566">
+                mTAND(r, S), the module output
+              </text>
+              <text class="t-sh" x="340" y="580">
+                K &#215; J, fixed shape whatever L
+                <tspan dy="2.6" font-size="78%">d</tspan>
+                was
+              </text>
+              <text class="t-tag" x="572" y="586">E7</text>
+
+              <!-- ============ legend ============ -->
+              <line
+                x1="8"
+                y1="612"
+                x2="712"
+                y2="612"
+                stroke="var(--panelstroke)"
+                stroke-width="1"
+              />
+              <text class="t-sec" x="8" y="630">legend</text>
+              <circle class="par" cx="80" cy="626" r="3.2" />
+              <text class="t-sh" x="89" y="630">holds learned parameters</text>
+              <rect
+                class="bx-q"
+                x="243"
+                y="620"
+                width="14"
+                height="10"
+                rx="2"
+              />
+              <text class="t-sh" x="262" y="630">
+                query path (time we chose)
+              </text>
+              <rect
+                class="bx-k"
+                x="425"
+                y="620"
+                width="14"
+                height="10"
+                rx="2"
+              />
+              <text class="t-sh" x="444" y="630">
+                key path (observation time)
+              </text>
+              <rect
+                class="bx-op"
+                x="600"
+                y="620"
+                width="14"
+                height="10"
+                rx="2"
+              />
+              <text class="t-sh" x="619" y="630">value path / operation</text>
+              <text class="t-tag" x="8" y="648">E1</text>
+              <text class="t-sh" x="28" y="648">
+                tags refer to the numbered equations in this chapter
+              </text>
+            </svg>
+            <figcaption
+              class="mt-3 text-sm text-muted max-w-2xl mx-auto text-center"
+            >
+              The mTAND module expanded. Read the three columns at the top as
+              the three roles: a time we chose supplies the query, an
+              observation time supplies the key, and the measurement itself
+              supplies the value and travels down the right hand edge without
+              touching a projection or a score.
+            </figcaption>
+          </figure>
+        </section>
+
+        <!-- ==================================================== 5 -->
+        <section>
+          <h2 class="text-2xl font-semibold text-ink dark:text-white mb-4">
+            The encoder
+          </h2>
+
+          <p>
+            The encoder turns the record into something rectangular and then
+            into something probabilistic. Three steps.
+          </p>
+
+          <p class="mt-4">
+            <b>Step one.</b> Run the module at the reference points, which is
+            (E7) with the observations as keys and values:
+          </p>
+
+          <div class="my-4 py-2 text-center overflow-x-auto">
+            $$A^{\text{enc}}_{\text{TAN}} =
+            \operatorname{mTAND}^{\text{enc}}(\mathbf{r},\, \mathcal{S}) \;\in\;
+            \mathbb{R}^{K \times J}$$
+          </div>
+
+          <p>
+            We write $A$ for the arrays that carry a value per reference point,
+            with a superscript saying which half of the network they belong to
+            and a subscript saying which stage produced them. The paper calls
+            these $h^{\text{enc}}_{\text{TAN}}$ and so on, but the letter is
+            changed here only because $H$ is already the number of heads. Row
+            $k$ of this one is the $J$ numbers describing the record as seen
+            from time $r_k$.
+          </p>
+
+          <p class="mt-4">
+            <b>Step two.</b> Read that array along the reference axis with a
+            bidirectional GRU (given that this tutorial doesn't go into GRUs,
+            <a
+              href="https://arxiv.org/pdf/1412.3555"
+              target="_blank"
+              class="text-blue-600 hover:text-blue-800 hover:underline font-medium transition-colors"
+              >here</a
+            >
+            is a reference to it.):
+          </p>
+          <div class="my-4 py-2 text-center">
+            $$A^{\text{enc}}_{\text{RNN}} =
+            \operatorname{biGRU}\big(A^{\text{enc}}_{\text{TAN}}\big) \;\in\;
+            \mathbb{R}^{K \times 2g} \tag{E8}$$
+          </div>
+
+          <p>
+            The GRU is bidirectional: one pass runs forward along the reference
+            grid, $r_1$ to $r_K$, and a second runs backward, $r_K$ to $r_1$.
+            Each pass carries its own hidden state of width $g$, and the two are
+            concatenated at every reference point, which is where the $2g$ comes
+            from. So $r_k$ ends up knowing about the whole stay on both sides of
+            it, not only what came before.
+          </p>
+
+          <p class="mt-4">
+            This is the step where a reference point comes to know about its
+            neighbours rather than only about the observations it attended to.
+            It is also, incidentally, where content finally gets to influence
+            anything, since (E3) refused to let it influence the weights.
+          </p>
+
+          <p class="mt-4">
+            <b>Step three.</b> A small network maps each row to the parameters
+            of a Gaussian, and a latent vector is drawn there:
+          </p>
+
+          <div
+            class="my-3 py-3 px-2 text-center overflow-x-auto rounded-lg border border-c3/40 bg-c3/5"
+          >
+            $$\begin{aligned} \boldsymbol{\mu}_k &=
+            f_\mu\big(A^{\text{enc}}_{\text{RNN}}[k,:]\big), \qquad
+            \boldsymbol{\sigma}_k^2 = \exp
+            f_\sigma\big(A^{\text{enc}}_{\text{RNN}}[k,:]\big) \\[4pt]
+            \mathbf{z}_k &\sim \mathcal{N}\big(\boldsymbol{\mu}_k,\;
+            \operatorname{diag}\boldsymbol{\sigma}_k^2\big) \end{aligned}
+            \tag{E9}$$
+          </div>
+
+          <p>
+            where $d_z$ is the latent width, so $\boldsymbol{\mu}_k,
+            \boldsymbol{\sigma}_k, \mathbf{z}_k \in \mathbb{R}^{1 \times d_z}$,
+            and $f_\mu, f_\sigma$ are two heads off one two-layer network
+            $\mathbb{R}^{2g} \to \mathbb{R}^{2 d_z}$.
+          </p>
+
+          <p class="mt-4">
+            Equation (E9) is evaluated once per reference point, so it produces
+            $K$ separate draws, each a row of $d_z$ numbers. Collect those $K$
+            rows into a single array, one row per reference point in time order
+            and it yields $Z$:
+          </p>
+
+          <div class="my-4 py-2 text-center overflow-x-auto">
+            $$Z = \begin{bmatrix} \mathbf{z}_1 \\ \vdots \\ \mathbf{z}_K
+            \end{bmatrix} \;\in\; \mathbb{R}^{K \times d_z}$$
+          </div>
+
+          <div class="panel-c4 rounded-lg p-5 mt-6 text-[16px]">
+            <p class="font-medium text-ink dark:text-white mb-2">
+              What the latent indexes over
+            </p>
+            <p>
+              It is crucial to highlight that
+              <b
+                >there are $K$ latent vectors, one per reference point, not one
+                latent vector for the record</b
+              >. $Z$ is a sequence, and its index is time. The record is not
+              compressed into a single summary and then expanded again, it is
+              compressed into a sequence of summaries, each responsible for its
+              own stretch of the stay.
+            </p>
+            <p class="mt-3">
+              That is a deliberate choice and the paper calls it a temporally
+              distributed latent representation. It is what lets the model hold
+              on to something that happened at hour 6 and had stopped by hour
+              30. A single global latent has to spend capacity remembering
+              <em>when</em>; a sequence of latents gets it for free from the
+              index.
+            </p>
+            <p class="mt-3">
+              Note also what $K$ is now doing. It is simultaneously the
+              resolution of the interpolation, the length of the RNN sequence,
+              and the length of the latent. One hyperparameter, three jobs.
+            </p>
+          </div>
+        </section>
+
+        <!-- ==================================================== 6 -->
+        <section>
+          <h2 class="text-2xl font-semibold text-ink dark:text-white mb-4">
+            The decoder, and the swap
+          </h2>
+
+          <p>
+            The decoder runs the same three steps in the other order and, more
+            importantly, runs the module with its roles exchanged. Start from
+            latents, either drawn from the prior $\mathcal{N}(\mathbf{0}, I)$
+            when generating or from (E9) when reconstructing.
+          </p>
+
+          <div class="my-4 py-2 text-center">
+            $$A^{\text{dec}}_{\text{RNN}} = \operatorname{biGRU}^{\text{dec}}(Z)
+            \;\in\; \mathbb{R}^{K \times 2g} \tag{E10}$$
+          </div>
+
+          <p>
+            The latents are independent across $k$ under the prior, so this step
+            exists to give them temporal dependence before anything is read off
+            them. Then the module again, at whatever times we want output for:
+          </p>
+
+          <div
+            class="my-3 py-3 px-2 text-center rounded-lg border border-c3/40 bg-c3/5"
+          >
+            $$A^{\text{dec}}_{\text{TAN}} =
+            \operatorname{mTAND}^{\text{dec}}\big(\mathbf{t},\,
+            A^{\text{dec}}_{\text{RNN}}\big) \;\in\; \mathbb{R}^{T \times J'}
+            \tag{E11}$$
+          </div>
+
+          <p>
+            where $\mathbf{t} = [t_1, \dots, t_T]$ is the list of times we are
+            asking about, and $J'$ is the width of the decoder module's output,
+            which is a free hyperparameter exactly as $J$ was. Finally a fully
+            connected map, applied independently at each output time, produces a
+            mean per channel:
+          </p>
+
+          <div class="my-4 py-2 text-center">
+            $$x_{i,d} \sim \mathcal{N}\Big(f^{\text{dec}}
+            \big(A^{\text{dec}}_{\text{TAN}}[i,:]\big)[d], \; \sigma^2 \Big),
+            \qquad f^{\text{dec}} : \mathbb{R}^{J'} \to \mathbb{R}^{D}
+            \tag{E12}$$
+          </div>
+
+          <p>with $\sigma^2$ a fixed constant, not learned.</p>
+
+          <h3 class="text-xl font-semibold text-ink dark:text-white mt-8 mb-3">
+            The symmetry encoder and decoder
+          </h3>
+
+          <p>(E11) is (E7) the same function with three substitutions.</p>
+
+          <div class="my-6 overflow-x-auto">
+            <table class="w-full text-[15px]">
+              <thead>
+                <tr
+                  class="text-left text-muted border-b border-gray-200 dark:border-gray-800"
+                >
+                  <th class="py-2 font-medium"></th>
+                  <th class="py-2 font-medium">encoder (E7)</th>
+                  <th class="py-2 font-medium">decoder (E11)</th>
+                </tr>
+              </thead>
+              <tbody class="text-gray-700 dark:text-gray-300 align-top">
+                <tr class="border-b border-gray-100 dark:border-gray-800/60">
+                  <td class="py-2"><strong>query</strong></td>
+                  <td class="py-2">
+                    $\boldsymbol{\phi}_h(r_k)$, a reference point.
+                    <span class="text-muted">$K$ of them</span>
+                  </td>
+                  <td class="py-2">
+                    $\boldsymbol{\phi}_h(t_i)$, a time we want back.
+                    <span class="text-muted">$T$ of them</span>
+                  </td>
+                </tr>
+                <tr class="border-b border-gray-100 dark:border-gray-800/60">
+                  <td class="py-2"><strong>key</strong></td>
+                  <td class="py-2">
+                    $\boldsymbol{\phi}_h(t_{i,d})$, an observation time.
+                    <span class="text-muted">$L$ of them</span>
+                  </td>
+                  <td class="py-2">
+                    $\boldsymbol{\phi}_h(r_k)$, a reference point.
+                    <span class="text-muted">$K$ of them</span>
+                  </td>
+                </tr>
+                <tr class="border-b border-gray-100 dark:border-gray-800/60">
+                  <td class="py-2"><strong>value</strong></td>
+                  <td class="py-2">
+                    $x_{i,d}$, a measurement.
+                    <span class="text-muted">$D$ channels</span>
+                  </td>
+                  <td class="py-2">
+                    $A^{\text{dec}}_{\text{RNN}}[k,:]$, a hidden state.
+                    <span class="text-muted">$2g$ coordinates</span>
+                  </td>
+                </tr>
+                <tr class="border-b border-gray-100 dark:border-gray-800/60">
+                  <td class="py-2"><strong>mixing tensor</strong></td>
+                  <td class="py-2">$U \in \mathbb{R}^{H \times D \times J}$</td>
+                  <td class="py-2">
+                    $U^{\text{dec}} \in \mathbb{R}^{H \times 2g \times J'}$
+                  </td>
+                </tr>
+                <tr class="border-b border-gray-100 dark:border-gray-800/60">
+                  <td class="py-2"><strong>mask</strong></td>
+                  <td class="py-2">needed, $M \in \{0,1\}^{L \times D}$</td>
+                  <td class="py-2">not needed</td>
+                </tr>
+                <tr>
+                  <td class="py-2"><strong>output</strong></td>
+                  <td class="py-2">$K \times J$</td>
+                  <td class="py-2">$T \times J'$</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </section>
+
+        <!-- ==================================================== 7 -->
+        <section>
+          <h2 class="text-2xl font-semibold text-ink dark:text-white mb-4">
+            The training objective
+          </h2>
+
+          <p>
+            The model is a
+            <a
+              href="https://en.wikipedia.org/wiki/Variational_autoencoder"
+              target="_blank"
+              class="text-blue-600 hover:text-blue-800 hover:underline font-medium transition-colors"
+              >variational autoencoder</a
+            >, so it is trained by maximising a lower bound on the likelihood of
+            the record. Two term follow a reconstruction term saying the decoder
+            should reproduce what was measured, and a term keeping each
+            $\mathbf{z}_k$ close to a standard normal prior.
+          </p>
+
+          <div class="my-4 py-2 text-center">
+            $$\mathcal{L} = \sum_{n} \frac{1}{\sum_{d} L_{d,n}} \Big(
+            \mathbb{E}_{q}\big[\log p(\mathbf{x}_n \mid Z, \mathbf{t}_n)\big]
+            \;-\; D_{\mathrm{KL}}^{\,(n)} \Big) \tag{E13}$$
+          </div>
+
+          <p>
+            where $D_{\mathrm{KL}}^{\,(n)}$ is shorthand for the divergence
+            between the posterior $q(Z \mid \mathbf{r}, \mathcal{S}_n)$ and the
+            prior $p(Z)$. The two are calculated as follows
+          </p>
+
+          <div class="my-4 py-2 text-center overflow-x-auto">
+            $$\begin{aligned} D_{\mathrm{KL}}^{\,(n)} &= \sum_{k=1}^{K}
+            D_{\mathrm{KL}}\big(q(\mathbf{z}_k \mid \mathbf{r}, \mathcal{S}_n)
+            \,\|\, p(\mathbf{z}_k)\big) \\[6pt] \log p(\mathbf{x}_n \mid Z,
+            \mathbf{t}_n) &= \sum_{d=1}^{D} \sum_{i=1}^{L_{d,n}} \log
+            p\big(x_{i,d,n} \mid Z, t_{i,d,n}\big) \end{aligned}$$
+          </div>
+
+          <p>Three things are doing work in there.</p>
+
+          <ol class="mt-3 ml-6 space-y-3 list-decimal">
+            <li>
+              <b>The KL factorises over reference points</b> because the prior
+              is independent across $k$. So it is $K$ small Gaussian KLs added
+              up, one per reference point, not one KL over a $K d_z$-dimensional
+              object.
+            </li>
+            <li>
+              <b
+                >The reconstruction term is summed only over observations that
+                exist.</b
+              >
+              The inner sum runs to $L_{d,n}$. There is no term in the loss for
+              the lactate at minute 300, because nothing was measured there, so
+              the model is never trained to reproduce a value nobody recorded.
+              This is the second and last place missingness enters the model,
+              the first being the range of the softmax in (E4). Everywhere else
+              it has already been dealt with.
+            </li>
+            <li>
+              <b>Each record is divided by its own observation count.</b>
+              Without the $1 / \sum_d L_{d,n}$ factor, a patient with two
+              thousand pulse readings would contribute hundreds of times more
+              gradient than a patient with thirty, and the model would quietly
+              become a model of well monitored patients.
+            </li>
+          </ol>
+
+          <p class="mt-4">
+            For a supervised task the latents are read by a classifier and a
+            weighted term is added:
+          </p>
+
+          <div class="my-4 py-2 text-center overflow-x-auto">
+            $$\begin{aligned} \mathcal{L}_{\text{sup}} &= \mathcal{L} +
+            \lambda\, \mathbb{E}_{q}\big[\log p_\delta(y_n \mid Z)\big] \\[4pt]
+            y^{*} &= \arg\max_{y}\; \mathbb{E}_{q}\big[\log p_\delta(y \mid
+            Z)\big] \end{aligned} \tag{E14}$$
+          </div>
+
+          <p>
+            with $p_\delta$ a GRU over the $K$ latents followed by a small fully
+            connected network, and $\lambda$ trading the two off.
+          </p>
+
+          <p class="mt-4">
+            That is the model the paper builds. The
+            <a
+              href="mtan_as_encoder.html"
+              class="text-c3 hover:text-c2 transition-colors"
+              >next section</a
+            >
+            drops it and asks a more general question:
+            <em
+              >how mTAN can be used as an encoder underneath somebody else's
+              neural network</em
+            >?
+          </p>
+        </section>
+      </div>
+
+      <nav
+        class="mt-20 pt-8 border-t border-gray-200 dark:border-gray-800 flex justify-between text-sm"
+      >
+        <a
+          href="missingness.html"
+          class="text-muted hover:text-c3 transition-colors"
+          >&larr; 12 &nbsp;&middot;&nbsp; Missingness Without Imputation</a
+        >
+        <a
+          href="mtan_as_encoder.html"
+          class="text-muted hover:text-c3 transition-colors"
+          >14 &nbsp;&middot;&nbsp; Many Streams, One Clock &rarr;</a
+        >
+      </nav>
+    </article>
+  </body>
+</html>

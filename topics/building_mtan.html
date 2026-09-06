@@ -1,0 +1,511 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Building One &mdash; Attention Over Time</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            fontFamily: {
+              sans: ["Inter", "system-ui", "sans-serif"],
+            },
+            colors: {
+              ink: "#000000",
+              surface: "#F7F8FA",
+              muted: "#5F6B75",
+              c1: "#000000",
+              c2: "#233D4D",
+              c3: "#FE7F2D",
+              c4: "#EAECF0",
+            },
+          },
+        },
+      };
+    </script>
+    <script src="../theme.js"></script>
+    <script>
+      window.MathJax = {
+        tex: {
+          inlineMath: [["$", "$"]],
+          displayMath: [["$$", "$$"]],
+        },
+      };
+    </script>
+    <script
+      id="MathJax-script"
+      async
+      src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"
+    ></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="../styles.css" />
+  </head>
+  <body
+    class="bg-surface text-ink font-sans antialiased dark:bg-[#0B1319] dark:text-gray-100"
+  >
+    <article class="max-w-3xl mx-auto px-6 py-20">
+      <a
+        href="../index.html"
+        class="text-sm text-muted hover:text-c3 transition-colors"
+        >&larr; Back to syllabus</a
+      >
+
+      <header class="mt-8 mb-16">
+        <p class="text-sm text-c3 font-medium uppercase tracking-widest mb-3">
+          15 &nbsp;&middot;&nbsp; Attention Over Time
+        </p>
+        <h1 class="text-4xl md:text-5xl font-bold leading-tight mb-4">
+          Building One
+        </h1>
+        <p class="text-lg text-muted leading-relaxed">
+          The module in sixty lines, and one forward pass from three raw
+          streams to a scalar loss.
+        </p>
+      </header>
+
+      <div
+        class="space-y-12 text-gray-700 dark:text-gray-300 leading-relaxed text-[18px]"
+      >
+        <section>
+          <p>
+            Everything up to here has been equations and shapes. This page
+            writes the module down as code, wires three very different streams
+            into it, puts an ordinary multi-head attention on top, and takes the
+            whole thing to a cross-entropy loss. Every shape quoted below was
+            printed by running the code, not worked out on paper.
+          </p>
+
+          <p class="mt-4">
+            The point is not an efficient implementation. It is that the
+            architecture of
+            <a
+              href="mtan_as_encoder.html"
+              class="text-c3 hover:text-c2 transition-colors"
+              >section 14</a
+            >
+            is small enough to hold in your head, and that nothing surprising
+            happens when you actually run it.
+          </p>
+        </section>
+
+        <section>
+          <h2 class="text-2xl font-semibold text-ink dark:text-white mb-4">
+            The module
+          </h2>
+
+          <p>
+            Two classes. The first is the time embedding of
+            <a
+              href="time_embedding.html"
+              class="text-c3 hover:text-c2 transition-colors"
+              >section 09</a
+            >, one linear coordinate and $d_r - 1$ periodic ones. The second is
+            everything from (E2) to (E7). The comments name the equation each
+            line implements.
+          </p>
+
+          <div class="rounded-xl overflow-hidden my-6 text-[14px]">
+            <pre class="overflow-x-auto"><code class="language-python">class Time2Vec(nn.Module):                                   # (E1)
+    def __init__(self, d_r):
+        super().__init__()
+        self.linear   = nn.Linear(1, 1)
+        self.periodic = nn.Linear(1, d_r - 1)
+    def forward(self, t):                    # t: (B, L) -&gt; (B, L, d_r)
+        t = t.unsqueeze(-1)
+        return torch.cat([self.linear(t), torch.sin(self.periodic(t))], dim=-1)
+
+class MTAND(nn.Module):                                      # (E2)-(E7)
+    def __init__(self, D_in, J, d_r=64, H=4):
+        super().__init__()
+        assert d_r % H == 0
+        self.H, self.d_k = H, d_r // H
+        self.Wq = nn.Linear(d_r, d_r, bias=False)
+        self.Wk = nn.Linear(d_r, d_r, bias=False)
+        self.U  = nn.Linear(D_in * H, J)
+    def forward(self, phi_q, phi_k, values, mask):
+        # phi_q (B,K,d_r)  phi_k (B,L,d_r)  values (B,L,D)  mask (B,L,D)
+        B, K, _ = phi_q.shape
+        D = values.size(-1)
+        q = self.Wq(phi_q).view(B, K, self.H, self.d_k).transpose(1, 2)   # (B,H,K,d_k)
+        k = self.Wk(phi_k).view(B, -1, self.H, self.d_k).transpose(1, 2)  # (B,H,L,d_k)
+        e = q @ k.transpose(-2, -1) / self.d_k ** 0.5                     # (B,H,K,L)   (E3)
+        e = e.unsqueeze(-1).expand(-1, -1, -1, -1, D)                     # (B,H,K,L,D)
+        e = e.masked_fill(mask[:, None, None] == 0, float(&quot;-inf&quot;))
+        a = torch.softmax(e, dim=3).nan_to_num(0.0)                       # over L      (E4)
+        xh = (a * values[:, None, None]).sum(dim=3)                       # (B,H,K,D)   (E5)
+        xh = xh.transpose(1, 2).reshape(B, K, self.H * D)                 # fold (h,d)
+        return self.U(xh)                                                 # (B,K,J)     (E6,E7)</code></pre>
+          </div>
+
+          <p>
+            Three lines in that block are the ones worth staring at.
+          </p>
+
+          <ul class="mt-3 ml-6 space-y-3 list-disc">
+            <li>
+              <code class="text-[15px]">e.unsqueeze(-1).expand(..., D)</code> is
+              where one score per $(h, k, \ell)$ becomes one score per
+              $(h, k, \ell, d)$. The scores themselves do not depend on the
+              channel, but the <em>mask</em> does, so the same score is about to
+              be normalised $D$ different ways.
+            </li>
+            <li>
+              <code class="text-[15px]">softmax(e, dim=3)</code> normalises over
+              the key axis and nothing else. That single argument is the whole
+              of (E4), and getting it wrong is the classic way to break this
+              module: normalising over queries would make reference points
+              compete with each other, which is meaningless.
+            </li>
+            <li>
+              <code class="text-[15px]">.nan_to_num(0.0)</code> handles a
+              channel with no observations at all. Every logit in that row is
+              $-\infty$, the softmax is $0/0$, and the sensible answer is a row
+              of zeros. This is the zero block that
+              <a
+                href="mtan_as_encoder.html"
+                class="text-c3 hover:text-c2 transition-colors"
+                >section 14</a
+              >
+              relies on, made explicit in one call.
+            </li>
+          </ul>
+
+          <p class="mt-4">
+            Note also what is <em>not</em> there. No $W_v$, no projection of the
+            values, no positional encoding, no causal mask, and no reference to
+            what any channel means.
+          </p>
+        </section>
+
+        <section>
+          <h2 class="text-2xl font-semibold text-ink dark:text-white mb-4">
+            Three streams
+          </h2>
+
+          <p>
+            The running example from
+            <a
+              href="mtan_as_encoder.html"
+              class="text-c3 hover:text-c2 transition-colors"
+              >section 14</a
+            >, made concrete. One scalar stream and two pre-embedded ones.
+          </p>
+
+          <div class="my-6 overflow-x-auto">
+            <table class="w-full text-[15px]">
+              <thead>
+                <tr
+                  class="text-left text-muted border-b border-gray-200 dark:border-gray-800"
+                >
+                  <th class="py-2 font-medium">stream</th>
+                  <th class="py-2 font-medium">$f_b$</th>
+                  <th class="py-2 font-medium">$L_b$</th>
+                  <th class="py-2 font-medium">$D_b$</th>
+                  <th class="py-2 font-medium">mask</th>
+                  <th class="py-2 font-medium">$J_b$</th>
+                </tr>
+              </thead>
+              <tbody class="text-gray-700 dark:text-gray-300 align-top">
+                <tr class="border-b border-gray-100 dark:border-gray-800/60">
+                  <td class="py-2">labs and vitals</td>
+                  <td class="py-2">identity</td>
+                  <td class="py-2">300</td>
+                  <td class="py-2">12, fed as 24</td>
+                  <td class="py-2">$L_1 \times 12$, holey</td>
+                  <td class="py-2">64</td>
+                </tr>
+                <tr class="border-b border-gray-100 dark:border-gray-800/60">
+                  <td class="py-2">notes</td>
+                  <td class="py-2">a frozen text encoder</td>
+                  <td class="py-2">7</td>
+                  <td class="py-2">768</td>
+                  <td class="py-2">$L_2$, striped</td>
+                  <td class="py-2">64</td>
+                </tr>
+                <tr>
+                  <td class="py-2">prior diagnoses</td>
+                  <td class="py-2">an embedding table</td>
+                  <td class="py-2">15</td>
+                  <td class="py-2">128</td>
+                  <td class="py-2">$L_3$, striped</td>
+                  <td class="py-2">32</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          <p>
+            The scalar stream is fed as $[\,V_1 \;\|\; M_1\,]$, which is why
+            its 12 channels enter the module as 24. The two embedded streams
+            take their masks per event and broadcast them across the full width,
+            which is the single line
+            <code class="text-[15px]">m[..., None].expand_as(v)</code> below.
+            The three output widths deliberately disagree.
+          </p>
+
+          <div class="rounded-xl overflow-hidden my-6 text-[14px]">
+            <pre class="overflow-x-auto"><code class="language-python">class Encoder(nn.Module):
+    def __init__(self, D_ts=12, d_note=768, n_codes=2000, d_code=128,
+                 K=48, d_r=64, H=4, J1=64, J2=64, J3=32):
+        super().__init__()
+        self.K = K
+        self.phi   = Time2Vec(d_r)                 # one clock, shared
+        self.codes = nn.Embedding(n_codes, d_code, padding_idx=0)
+        self.m1 = MTAND(2 * D_ts, J1, d_r, H)      # values are [x || m]
+        self.m2 = MTAND(d_note,   J2, d_r, H)
+        self.m3 = MTAND(d_code,   J3, d_r, H)
+    def forward(self, ts_v, ts_t, ts_m, nt_e, nt_t, nt_m, dx_i, dx_t, dx_m):
+        B = ts_v.size(0)
+        r   = torch.linspace(0, 1, self.K).expand(B, -1)
+        pq  = self.phi(r)
+        A1 = self.m1(pq, self.phi(ts_t), torch.cat([ts_v, ts_m], -1),
+                                          torch.cat([ts_m, ts_m], -1))
+        A2 = self.m2(pq, self.phi(nt_t), nt_e, nt_m[..., None].expand_as(nt_e))
+        cv = self.codes(dx_i)
+        A3 = self.m3(pq, self.phi(dx_t), cv, dx_m[..., None].expand_as(cv))
+        return torch.cat([A1, A2, A3], dim=-1), (A1, A2, A3)</code></pre>
+          </div>
+
+          <p>
+            One <code class="text-[15px]">Time2Vec</code> is constructed and
+            handed to all three modules, so every stream is read on the same
+            learned clock. One line, and it is the difference between the
+            models that share a clock and the models that do not.
+          </p>
+        </section>
+
+        <section>
+          <h2 class="text-2xl font-semibold text-ink dark:text-white mb-4">
+            Attention over the grid, and the loss
+          </h2>
+
+          <p>
+            Now the payoff. The concatenated array is regular, so from here on
+            we are allowed to use ordinary attention, and we do: a stock
+            transformer encoder layer over the $K$ reference points.
+          </p>
+
+          <div class="rounded-xl overflow-hidden my-6 text-[14px]">
+            <pre class="overflow-x-auto"><code class="language-python">class Model(nn.Module):
+    def __init__(self, J=160, n_heads=8, n_classes=2):
+        super().__init__()
+        self.enc  = Encoder()
+        self.attn = nn.TransformerEncoderLayer(J, n_heads, 4 * J, batch_first=True)
+        self.head = nn.Linear(J, n_classes)
+    def forward(self, *b):
+        A, parts = self.enc(*b)
+        Z = self.attn(A)
+        return self.head(Z.mean(dim=1)), A, parts</code></pre>
+          </div>
+
+          <div class="panel-c4 rounded-lg p-5 mt-6 text-[16px]">
+            <p class="font-medium text-ink dark:text-white mb-2">
+              Two attentions, and they are not the same attention
+            </p>
+            <p>
+              This page contains two attention mechanisms and it is worth
+              naming the difference, because it is the whole argument of the
+              tutorial in one place.
+            </p>
+            <p class="mt-3">
+              <b>Inside mTAND</b>, the score is a function of two
+              <em>times</em> and nothing else. The measurement is a value and
+              never reaches the score, so the module can say <em>when</em> and
+              never <em>what</em>. That is what let it eat an irregular record.
+            </p>
+            <p class="mt-3">
+              <b>In <code class="text-[15px]">self.attn</code></b>, the score is
+              the ordinary content-based one: a projection of a row against a
+              projection of another row, exactly the mechanism this tutorial
+              started with in
+              <a
+                href="tokens_to_timestamps.html"
+                class="text-c3 hover:text-c2 transition-colors"
+                >section 01</a
+              >. It is usable here, and only here, because its input is finally
+              a regular sequence of $K$ rows.
+            </p>
+            <p class="mt-3">
+              The first attention exists so that the second one can be
+              ordinary.
+            </p>
+          </div>
+        </section>
+
+        <section>
+          <h2 class="text-2xl font-semibold text-ink dark:text-white mb-4">
+            What actually comes out
+          </h2>
+
+          <p>
+            Running the whole thing on a batch of 4 records of random data, with
+            $K = 48$, $d_r = 64$ and $H = 4$:
+          </p>
+
+          <div class="my-6 overflow-x-auto">
+            <table class="w-full text-[15px]">
+              <thead>
+                <tr
+                  class="text-left text-muted border-b border-gray-200 dark:border-gray-800"
+                >
+                  <th class="py-2 font-medium">after</th>
+                  <th class="py-2 font-medium">object</th>
+                  <th class="py-2 font-medium">shape</th>
+                </tr>
+              </thead>
+              <tbody class="text-gray-700 dark:text-gray-300">
+                <tr class="border-b border-gray-100 dark:border-gray-800/60">
+                  <td class="py-2">in</td>
+                  <td class="py-2">labs and vitals, values and mask</td>
+                  <td class="py-2">(4, 300, 12) twice</td>
+                </tr>
+                <tr class="border-b border-gray-100 dark:border-gray-800/60">
+                  <td class="py-2">in</td>
+                  <td class="py-2">note embeddings</td>
+                  <td class="py-2">(4, 7, 768)</td>
+                </tr>
+                <tr class="border-b border-gray-100 dark:border-gray-800/60">
+                  <td class="py-2">in</td>
+                  <td class="py-2">diagnosis code ids</td>
+                  <td class="py-2">(4, 15)</td>
+                </tr>
+                <tr class="border-b border-gray-100 dark:border-gray-800/60">
+                  <td class="py-2">(E7)</td>
+                  <td class="py-2">$A_1$, $A_2$, $A_3$</td>
+                  <td class="py-2">
+                    (4, 48, 64), (4, 48, 64), (4, 48, 32)
+                  </td>
+                </tr>
+                <tr class="border-b border-gray-100 dark:border-gray-800/60">
+                  <td class="py-2">(E17)</td>
+                  <td class="py-2">$A$, concatenated</td>
+                  <td class="py-2">(4, 48, 160)</td>
+                </tr>
+                <tr class="border-b border-gray-100 dark:border-gray-800/60">
+                  <td class="py-2">attention</td>
+                  <td class="py-2">$Z$</td>
+                  <td class="py-2">(4, 48, 160)</td>
+                </tr>
+                <tr class="border-b border-gray-100 dark:border-gray-800/60">
+                  <td class="py-2">mean over $K$</td>
+                  <td class="py-2">one vector per record</td>
+                  <td class="py-2">(4, 160)</td>
+                </tr>
+                <tr>
+                  <td class="py-2">head</td>
+                  <td class="py-2">logits, then cross entropy</td>
+                  <td class="py-2">(4, 2), then a scalar</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          <p>
+            809,602 parameters, and gradients reach the Time2Vec frequencies, so
+            the clock really is learned rather than fixed. The loss on the first
+            pass was 0.6065 against $\log 2 \approx 0.693$ for a coin flip,
+            which on random data with random labels means nothing at all except
+            that the graph is connected. There is no trained model on this page
+            and no result to report.
+          </p>
+        </section>
+
+        <section>
+          <h2 class="text-2xl font-semibold text-ink dark:text-white mb-4">
+            Four things worth asserting
+          </h2>
+
+          <p>
+            If you build this, these are the checks that catch the mistakes that
+            actually happen. All four were run against the code above and the
+            printed output is quoted.
+          </p>
+
+          <ol class="mt-3 ml-6 space-y-4 list-decimal">
+            <li>
+              <b>Weights over an observed channel sum to one.</b> Printed
+              <code class="text-[15px]">1.0000, 1.0000, 1.0000</code>. If this
+              is not one, the softmax is on the wrong axis.
+            </li>
+            <li>
+              <b>Weights over a channel with no observations sum to zero.</b>
+              Printed <code class="text-[15px]">0.0, 0.0, 0.0</code>, and the
+              resulting $\hat{x}$ is exactly zero. Not uniform, not
+              <code class="text-[15px]">nan</code>. This is the behaviour
+              section 14 leans on when a whole stream is absent.
+            </li>
+            <li>
+              <b>The output shape does not depend on how much arrived.</b> Feed
+              the same module 5, 300 and 4000 observations and it returns
+              (1, 48, 64) every time. That invariance is the entire product of
+              the module, so it deserves an assertion rather than a hope.
+            </li>
+            <li>
+              <b>Gradients reach the embedding frequencies.</b> If they do not,
+              you have accidentally built the fixed positional encoding of
+              <a
+                href="position_as_proxy.html"
+                class="text-c3 hover:text-c2 transition-colors"
+                >section 06</a
+              >
+              with extra steps.
+            </li>
+          </ol>
+        </section>
+
+        <section>
+          <h2 class="text-2xl font-semibold text-ink dark:text-white mb-4">
+            What this leaves out
+          </h2>
+
+          <ul class="mt-3 ml-6 space-y-3 list-disc">
+            <li>
+              <b>It is not causal.</b> Every reference point attends to every
+              observation, including later ones. For a real-time task you have
+              to mask keys later than the query, and the same goes for the
+              attention over the grid.
+            </li>
+            <li>
+              <b>The expansion to
+              <code class="text-[15px]">(B, H, K, L, D)</code> is the memory
+              cost.</b> With $L$ in the thousands this single intermediate
+              dominates everything else. The query axis can be processed in
+              slices, because the softmax normalises over keys and reference
+              points never interact, so nothing is approximated by doing so.
+            </li>
+            <li>
+              <b>Mean pooling over the grid throws the time axis away</b> at the
+              very last step, after all the work of building it. A task that
+              cares about <em>when</em> something happened should read $Z$
+              rather than its mean.
+            </li>
+            <li>
+              <b>No training loop, no data, no plots.</b> This page verifies
+              that the shapes compose and that the module behaves at its edge
+              cases. It says nothing about whether any of it works.
+            </li>
+          </ul>
+        </section>
+      </div>
+
+      <nav
+        class="mt-20 pt-8 border-t border-gray-200 dark:border-gray-800 flex justify-between text-sm"
+      >
+        <a
+          href="mtan_as_encoder.html"
+          class="text-muted hover:text-c3 transition-colors"
+          >&larr; 14 &nbsp;&middot;&nbsp; Many Streams, One Clock</a
+        >
+        <span></span>
+      </nav>
+    </article>
+  </body>
+</html>
