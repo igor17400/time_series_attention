@@ -206,14 +206,14 @@
           <div
             class="my-3 py-3 text-center rounded-lg border border-c3/40 bg-c3/5"
           >
-            $$s_d = \big\{ (t_{i,d},\; x_{i,d}) \big\}_{i=1}^{L_d}, \qquad
+            $$\mathcal{S}_d = \big\{ (t_{i,d},\; x_{i,d}) \big\}_{i=1}^{L_d}, \qquad
             t_{1,d} < t_{2,d} < \cdots < t_{L_d,\, d}$$
           </div>
 
           <p class="mt-4">
             where $t_{i,d}$ is the minute at which the $i$-th observation of
             channel $d$ was made and $x_{i,d}$ is the value recorded at it. The
-            stay as a whole is $s = (s_1, \dots, s_D)$. Three conditions hold:
+            stay as a whole is $\mathcal{S} = (\mathcal{S}_1, \dots, \mathcal{S}_D)$. Three conditions hold:
           </p>
 
           <ul class="mt-3 ml-6 space-y-3 list-disc text-[18px]">
@@ -250,7 +250,7 @@
 
           <p class="mt-4">
             This provides a fundamental test to apply to all subsequent
-            analyses. A processing mechanism either accepts the raw data $s$
+            analyses. A processing mechanism either accepts the raw data $\mathcal{S}$
             exactly as it is presented, which consists of three lists of varying
             lengths lacking common timestamps, or it fails to do so. If the
             system requires a rigid rectangular format beforehand,

@@ -116,8 +116,9 @@ prose (400 scores against eight million) and shows no mechanism.
 
 | name | shows |
 |------|-------|
-| `per_channel_softmax` | One reference point querying three channels. Three separate softmaxes, each normalised over only the ticks that channel actually has. No imputed values anywhere in the picture. |
-| `mask_channel` | The value track and the mask track side by side, and the two outputs they produce: an interpolated reading, and how much evidence stood behind it. |
+| `per_channel_softmax` | **Drawn.** One reference point querying three channels at once, each with its own observation times and its own fan of weighted edges. Term counts on the right, 2000 / 11 / 4. Shows that the channels never need to align because they are never compared. |
+| `multi_head_kernels` | **Drawn.** Three small multiples on one 48-hour axis, one per head, for lactate at a single reference point $r_k$ at 15 h. Head 1 a narrow bell on $r_k$, head 2 broad across the whole stay, head 3 peaking early and gone by $r_k$. A stem at each of the four lactate times gives the weight that head puts on it, and the resulting $\hat{x}_{h,d}(r_k)$ is printed at the right: 4.60, 3.40, 2.85. The record is drawn once, under all three. Shows that heads differ in what they call near, and sets up the sum over $h$ in `mixing_u`. |
+| `mixing_u` | **Drawn.** At one reference point, $H = 2$ heads each producing $D = 3$ interpolations, and the learned tensor $U$ collapsing those $H \times D$ numbers into $J$ outputs. The one place the channels meet, and it is after the interpolation rather than before. |
 
 ## 13 The mTAN Network
 

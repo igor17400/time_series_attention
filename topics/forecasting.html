@@ -92,8 +92,8 @@
             row for hour 3 keeps hours 1, 2 and 3 and loses everything after it.
             Those entries come out of the softmax as zeros, and the output for
             hour 3 is then built only from hours that had already happened while
-            hour 3 was the present. Nothing else changes, we have the same $Q$,
-            $K$ and $V$, the same $N \times N$ table of scores, with one
+            hour 3 was the present. Nothing else changes, we have the same queries,
+            keys and values, the same $N \times N$ table of scores, with one
             triangle of it struck out. It is also free, in the sense that every
             token in the sequence becomes a training example of its own. Hour 3
             predicts hour 4 while hour 20 predicts hour 21, all in the same

@@ -90,11 +90,12 @@
 
           <p class="mt-4">
             The resulting output from these equations is a continuous vector
-            representation. Given a model with a width of $d$, the positional
+            representation. Given a model with a width of $d_{\text{model}}$, the positional
             encoding translates a <b>single sequential position</b> into exactly
-            $d$ numerical values. These values are structured as $d/2$ distinct
+            $d_{\text{model}}$ numerical values. These values are structured as
+            $d_{\text{model}}/2$ distinct
             pairs, where each pair $j$ is governed by a specific frequency
-            defined by the equation $\omega_j = 10000^{-2j/d}$. This particular
+            defined by the equation $\omega_j = 10000^{-2j/d_{\text{model}}}$. This particular
             formulation effectively distributes the frequencies across a wide
             range of scales. Consequently, this approach provides the foundation
             necessary to represent time as a <b>continuous real variable</b> $t
@@ -103,8 +104,8 @@
           </p>
 
           <p class="mt-4">
-            Now consider what that would mean for our patient example. With $d =
-            8$ the encoding returns eight numbers for any position it is given,
+            Now consider what that would mean for our patient example. With
+            $d_{\text{model}} = 8$ the encoding returns eight numbers for any position it is given,
             so here is what it returns for hour 6, a position on the grid,
             beside what it returns for hour 6.33, the moment the blood was
             actually drawn:
@@ -178,12 +179,15 @@
             <span class="hl-c3"
               >the encoding only captures cyclical patterns and fails to
               represent the straightforward linear progression of time</span
-            >. For instance, the values for minute 40 and minute 2920 will
-            eventually loop back to approximately the exact same position (a
-            sine returns to where it was every time its argument advances by
-            $2\pi$). So once enough time has gone by every coordinate has come
-            back around, and with no coordinate that keeps growing there is
-            nothing left to tell the two moments apart.
+            >. Every coordinate is a sine or a cosine, so every coordinate is
+            trapped in $[-1, 1]$ and returns to each of its values again and
+            again, once every time its argument advances by $2\pi$. Nothing in
+            the vector grows with $t$. So the encoding cannot report how far
+            through the record a moment is, only where it sits within each of a
+            fixed set of rhythms, and two moments an arbitrary distance apart
+            can be placed arbitrarily close together. Minute 40 and minute 2920
+            are 48 hours apart, and no coordinate of the encoding carries a
+            value that reflects that.
           </p>
           <p class="mt-4">
             Fortunately, both of these limitations are easy to resolve. We can
@@ -211,8 +215,8 @@
           <div
             class="my-3 py-3 text-center rounded-lg border border-c3/40 bg-c3/5"
           >
-            $$\boldsymbol{\phi}(t)[i] = \begin{cases} \omega_0\, t + \alpha_0, & i = 0
-            \\[4pt] \sin\!\big(\omega_i\, t + \alpha_i\big), & 1 \leq i < d_r
+            $$\boldsymbol{\phi}(t)[m] = \begin{cases} \omega_0\, t + \alpha_0, & m = 0
+            \\[4pt] \sin\!\big(\omega_m\, t + \alpha_m\big), & 1 \leq m < d_r
             \end{cases}$$
           </div>
 
@@ -225,15 +229,15 @@
             </li>
             <li>
               $d_r$ is the <b>width</b> of the embedding, so $\boldsymbol{\phi}(t)$ is a
-              vector of $d_r$ numbers, one per coordinate $i$.
+              vector of $d_r$ numbers, one per coordinate $m$.
             </li>
             <li>
-              $\omega_i$ and $\alpha_i$ are <b>learned</b>, a frequency and a
+              $\omega_m$ and $\alpha_m$ are <b>learned</b>, a frequency and a
               phase per coordinate. The model discovers which timescales matter
               rather than inheriting them from a formula written for sentences.
             </li>
             <li>
-              Coordinate $i = 0$ is the <b>linear term</b>, the one that is not
+              Coordinate $m = 0$ is the <b>linear term</b>, the one that is not
               a wave. It grows with $t$ and never returns, which is what lets
               the embedding distinguish early from late rather than only
               recognising a rhythm.

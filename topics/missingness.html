@@ -1,0 +1,293 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Missingness Without Imputation &mdash; Attention Over Time</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            fontFamily: {
+              sans: ["Inter", "system-ui", "sans-serif"],
+            },
+            colors: {
+              ink: "#000000",
+              surface: "#F7F8FA",
+              muted: "#5F6B75",
+              c1: "#000000",
+              c2: "#233D4D",
+              c3: "#FE7F2D",
+              c4: "#EAECF0",
+            },
+          },
+        },
+      };
+    </script>
+    <script src="../theme.js"></script>
+    <script>
+      window.MathJax = {
+        tex: {
+          inlineMath: [["$", "$"]],
+          displayMath: [["$$", "$$"]],
+        },
+      };
+    </script>
+    <script
+      id="MathJax-script"
+      async
+      src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"
+    ></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="../styles.css" />
+  </head>
+  <body
+    class="bg-surface text-ink font-sans antialiased dark:bg-[#0B1319] dark:text-gray-100"
+  >
+    <article class="max-w-3xl mx-auto px-6 py-20">
+      <a
+        href="../index.html"
+        class="text-sm text-muted hover:text-c3 transition-colors"
+        >&larr; Back to syllabus</a
+      >
+
+      <header class="mt-8 mb-16">
+        <p class="text-sm text-c3 font-medium uppercase tracking-widest mb-3">
+          12 &nbsp;&middot;&nbsp; Attention Over Time
+        </p>
+        <h1 class="text-4xl md:text-5xl font-bold leading-tight mb-4">
+          Missingness Without Imputation
+        </h1>
+        <p class="text-lg text-muted leading-relaxed">
+          One softmax per channel, over only what that channel recorded.
+        </p>
+      </header>
+
+      <div
+        class="space-y-12 text-gray-700 dark:text-gray-300 leading-relaxed text-[18px]"
+      >
+        <section>
+          <p>
+            As
+            <a
+              href="repairs.html"
+              class="text-c3 hover:text-c2 transition-colors"
+              >Section 08</a
+            >
+            explained, a model either processes the raw data exactly as recorded
+            with misaligned timestamps and uneven list lengths or it demands a
+            fully populated rectangular grid. Any system that builds that
+            rectangle is forced to invent unmeasured data points that are
+            permanently mixed with the real clinical numbers. It would be nice
+            now to make this same verification into how the multi-time attention
+            mechanism performs against this exact standard.
+          </p>
+        </section>
+
+        <section>
+          <h2 class="text-2xl font-semibold text-ink dark:text-white mb-4">
+            One Softmax per Channel
+          </h2>
+          <p>
+            The whole answer is in the range of a sum. The weights at reference
+            point $r_k$ for channel $d$ are
+          </p>
+
+          <div
+            class="my-3 py-3 text-center rounded-lg border border-c3/40 bg-c3/5"
+          >
+            $$\kappa_d\big(r_k,\, t_{i,d}\big) = \frac{\exp e_d(r_k,\,
+            t_{i,d})}{\sum_{i'=1}^{L_d} \exp e_d(r_k,\, t_{i',d})}$$
+          </div>
+
+          <p class="mt-4">
+            and that denominator runs to $L_d$, the number of observations
+            channel $d$ has. Note how nothing is shared so far. Three channels
+            means three separate softmaxes at every reference point, one over
+            roughly two thousand terms, one over eleven, one over four. Each is
+            a complete probability distribution in its own right, and none of
+            them contains a term for a time when that channel was not measured.
+          </p>
+
+          <figure class="my-10 flex flex-col items-center">
+            <img
+              src="../figures/build/per_channel_softmax.svg"
+              alt="One reference point querying three channels at once. Heart rate, temperature and lactate each have their own observation times, and the reference point sends a separate fan of weighted edges into each channel, over that channel's own observations only."
+              class="w-full"
+            />
+            <figcaption class="mt-3 text-sm text-muted text-center max-w-3xl">
+              The same reference point asks three questions and gets three
+              answers, each built only from the ticks on its own line. The
+              channels never need to line up, because they are never compared
+              with one another.
+            </figcaption>
+          </figure>
+
+          <p class="mt-4">
+            This is what it means to handle missingness without imputing. There
+            is no step at which the lactate is given a value for a minute it was
+            not measured, and then that value is used. The question
+            <em>what was the lactate at $r_k$</em> is answered from the four
+            lactate measurements that exist, and if our reference point $r_k$
+            falls in a stretch where nothing was drawn, the weights simply
+            spread further out. The estimate becomes less certain, not more
+            invented.
+            <span class="hl-c3"
+              >Nothing is filled in because nothing is ever left empty to
+              fill</span
+            >.
+          </p>
+        </section>
+
+        <section>
+          <h2 class="text-2xl font-semibold text-ink dark:text-white mb-4">
+            Where the Channels Meet
+          </h2>
+          <p>
+            Something is still owed from
+            <a
+              href="channels.html"
+              class="text-c3 hover:text-c2 transition-colors"
+              >section 04</a
+            >. If the model strictly interpolates every channel independently,
+            it will inevitably fail to recognize
+            <b>coordinated clinical events</b>. For instance, a simultaneous
+            increase in pulse, temperature, and lactate. This inability to
+            capture cross-channel relationships is the primary objection against
+            channel independence. The solution is that the channels do
+            eventually interact, but this integration occurs outside of the
+            softmax function. This interaction relies on two key structural
+            components:
+          </p>
+
+          <ol class="list-decimal list-outside ml-6 space-y-3 mb-4 mt-4">
+            <li>
+              <b>Multiple Time Embeddings:</b> The module utilizes multiple
+              parallel time embeddings rather than a single instance. These are
+              indexed by $h = 1, \dots, H$, and each possesses its own unique
+              frequencies and learned projections. Consequently, each head $h$
+              generates its own distinct kernel $\kappa_{h,d}$ and computes its
+              own independent interpolation $\hat{x}_{h,d}(r_k)$.
+              <span class="hl-c3"
+                >This multi-head architecture allows different heads to learn
+                distinct interpretations of temporal proximity</span
+              >. One head might focus exclusively on a narrow localized window
+              while another head might evaluate trends across the entire patient
+              stay.
+
+              <figure class="my-8 flex flex-col items-center">
+                <img
+                  src="../figures/build/multi_head_kernels.svg"
+                  alt="Three rows sharing one 48 hour axis, one row per head, for the lactate channel and a single reference point at 15 hours. Head one is a narrow bell centred on the reference point and its estimate is 4.60. Head two is a broad curve covering the whole stay and its estimate is 3.40. Head three peaks early and has fallen to nothing by the reference point, and its estimate is 2.85. Below the three rows, the four lactate readings 2.4, 3.1, 4.6 and 2.8 are marked on the axis, and a vertical stem on each row shows the weight that head gives to each reading."
+                  class="w-full"
+                />
+                <figcaption
+                  class="mt-3 text-sm text-muted text-center max-w-2xl"
+                >
+                  One reference point, one channel, three heads. The vertical
+                  lines are the weight each head puts on each reading, and the
+                  numbers on the right are what those weights produce.
+                </figcaption>
+              </figure>
+            </li>
+            <li>
+              <b>The Learned Tensor $U$:</b> The mechanism introduces a
+              learned tensor $U$ that aggregates these varied
+              interpolations at a specific reference point into a final output
+              vector of width $J$:
+            </li>
+          </ol>
+
+          <div
+            class="my-3 py-3 text-center rounded-lg border border-c3/40 bg-c3/5"
+          >
+            $$\text{output}(r_k)[j] = \sum_{h=1}^{H} \sum_{d=1}^{D}
+            \hat{x}_{h,d}(r_k)\, U_{h,d,j}$$
+          </div>
+
+          <p class="mt-4">
+            Read the two sums. The one over $d$ is where the pulse, the
+            temperature and the lactate are finally combined, and the one over
+            $h$ is where the different notions of closeness from the multiple
+            $H$ heads are combined with them. Every output number is a weighted
+            mixture of every channel under every kernel, so the joint climb from
+            section 04 has a place to be represented after all.
+          </p>
+
+          <figure class="my-10 flex flex-col items-center">
+            <img
+              src="../figures/build/mixing_u.svg"
+              alt="At one reference point, two heads each produce three interpolations, one per channel, giving H times D numbers. A learned tensor U maps them into J output numbers, each of which is a weighted sum of all of them."
+              class="w-full"
+            />
+            <figcaption class="mt-3 text-sm text-muted text-center max-w-3xl">
+              Each box on the left is one channel interpolated under one head's
+              kernel. $U$ mixes all of them into the $J$ numbers that
+              leave the module, which is the first and only point at which the
+              three channels are combined.
+            </figcaption>
+          </figure>
+
+          <p class="mt-4">
+            That figure says where the mixing happens; the next one says what
+            the mixing is. Take a single output coordinate, $j = 3$, and follow
+            it from the interpolations to the number that leaves the module.
+          </p>
+
+          <figure class="my-10 flex flex-col items-center">
+            <img
+              src="../figures/build/mixing_u_detail.svg"
+              alt="The tensor contraction drawn as an architecture diagram at H equals two, D equals three and J equals five, following output coordinate j equals three. Top: the tensor U drawn as five stacked H by D slices, one per output coordinate, with slice three pulled to the front. Middle, left to right: the two by three grid of interpolations x hat h d at the reference point, an elementwise product symbol, the two by three slice U h d 3, an arrow labelled add up all six products, a single output cell, and the five-entry output vector with entry three highlighted. One matched pair of cells is shaded in both grids and joined by a dashed line. Below, the two grids are labelled: what the record says, and what the model learned."
+              class="w-full"
+            />
+            <figcaption class="mt-3 text-sm text-muted text-center max-w-3xl">
+              The two sums in the equation are one operation. The interpolations
+              form an $H \times D$ grid, $U$ holds one $H \times D$ grid of
+              weights for every output coordinate, and coordinate $j$ multiplies
+              the two position by position and adds up all $H \cdot D$ products.
+              The <b>left</b> grid is what the patient's record says and the
+              <b>right</b>
+              grid is what training decided that coordinate should care about.
+              Only the right grid changes as $j$ runs from 1 to $J$.
+            </figcaption>
+          </figure>
+
+          <p class="mt-4">
+            The specific timing of this integration is more critical than the
+            channel mixing itself. The channels intersect only after
+            interpolation, which completely eliminates the requirement for prior
+            alignment. This design ensures that no channel must borrow a
+            timestamp from another to enable combination. While section 04
+            framed architectural decision as a binary choice between mixing and
+            independence, this approach represents a hybrid solution. The
+            channels remain strictly independent precisely when alignment would
+            have caused distortion, and they operate jointly for all subsequent
+            processing steps.
+          </p>
+        </section>
+      </div>
+
+      <nav
+        class="mt-20 pt-8 border-t border-gray-200 dark:border-gray-800 flex justify-between text-sm"
+      >
+        <a
+          href="reference_points.html"
+          class="text-muted hover:text-c3 transition-colors"
+          >&larr; 11 &nbsp;&middot;&nbsp; Queries You Choose</a
+        >
+        <a
+          href="mtan_network.html"
+          class="text-muted hover:text-c3 transition-colors"
+          >13 &nbsp;&middot;&nbsp; The mTAN Network &rarr;</a
+        >
+      </nav>
+    </article>
+  </body>
+</html>
